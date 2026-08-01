@@ -1,0 +1,71 @@
+### Gradle ###
+.gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### Node / Yarn (frontend build) ###
+node_modules/
+yarn-error.log
+npm-debug.log*
+
+### SCM-Manager plugin development ###
+# home directory of "gradle run" outside of build/
+scm-home/
+*.smp
+
+### Java ###
+*.class
+hs_err_pid*
+replay_pid*
+
+### Logs ###
+*.log
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+### Eclipse / STS ###
+.apt_generated
+.apt_generated_test
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+nb-configuration.xml
+
+### VS Code ###
+.vscode/
+
+### AI assistants ###
+.gemini
+GEMINI.md
+.claude
+CLAUDE.md
+
+### Project local files ###
+private/
+data/
+config.yaml
+secret.bin
+
+### JRebel ###
+rebel.xml
+.rebel.xml.bak
+
+### macOS ###
+.DS_Store

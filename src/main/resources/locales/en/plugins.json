@@ -1,0 +1,65 @@
+{
+  "scm-oauth2-plugin": {
+    "nav-link": "OAuth2 / OIDC",
+    "login": "Login with {{provider}}",
+    "loginForm": {
+      "username": "Username",
+      "password": "Password",
+      "submit": "Login"
+    },
+    "form": {
+      "header": "Global OAuth2/OIDC Configuration",
+      "enabled": "Enabled",
+      "enabledHelp": "If \"Enabled\", SCM-Manager offers authentication via OAuth2/OIDC.",
+      "forceLogin": "Force login",
+      "forceLoginHelp": "If checked, unauthenticated users are redirected to the identity provider automatically. Conventional authentication is no longer possible.",
+      "ssoLogout": "Full SSO logout",
+      "ssoLogoutHelp": "If checked, logging out of SCM-Manager also terminates the SSO session at the identity provider (RP-initiated logout with id_token_hint via the end session endpoint).",
+      "providerName": "Provider name",
+      "providerNameHelp": "Display name of the identity provider. Shown on the login page as \"Login with <provider name>\". Required if oauth2 authentication is enabled.",
+      "providerNameRequired": "The provider name is required if oauth2 authentication is enabled.",
+      "endpoints": "Identity Provider Endpoints",
+      "discoveryUrl": "OIDC Discovery URL",
+      "discoveryUrlHelp": "Issuer URL or complete URL of the OIDC discovery document (.well-known/openid-configuration). If set, all endpoints below are resolved automatically from the discovery document and the manual entries are ignored.",
+      "authorizationUrl": "Authorization Endpoint",
+      "authorizationUrlHelp": "URL of the authorization endpoint of the identity provider, e.g. https://idp.example.com/realms/main/protocol/openid-connect/auth",
+      "tokenUrl": "Token Endpoint",
+      "tokenUrlHelp": "URL of the token endpoint of the identity provider.",
+      "userinfoUrl": "Userinfo Endpoint",
+      "userinfoUrlHelp": "URL of the OIDC userinfo endpoint of the identity provider.",
+      "endSessionUrl": "End Session Endpoint",
+      "endSessionUrlHelp": "URL of the OIDC end session endpoint used for the full SSO logout. Optional, only required if \"Full SSO logout\" is enabled and no discovery URL is set.",
+      "client": "Client",
+      "clientId": "Client ID",
+      "clientIdHelp": "The client id registered at the identity provider.",
+      "clientSecret": "Client Secret",
+      "clientSecretHelp": "The client secret registered at the identity provider. It is stored encrypted and never returned by the API. Leave empty to keep the stored secret.",
+      "clientSecretStored": "unchanged (a secret is stored)",
+      "clientSecretNotStored": "no secret stored yet",
+      "scopes": "Scopes",
+      "scopesHelp": "Space separated list of scopes requested from the identity provider, e.g. \"openid profile email\".",
+      "attributeMapping": "Attribute Mapping",
+      "username": "Username",
+      "usernameHelp": "Userinfo claim used as username (falls back to \"sub\").",
+      "displayName": "Display name",
+      "displayNameHelp": "Userinfo claim used as display name.",
+      "mail": "Mail",
+      "mailHelp": "Userinfo claim used as email address.",
+      "groups": "Groups",
+      "groupsHelp": "Userinfo claim used for group memberships.",
+      "adminGroup": "Administrator group",
+      "adminGroupHelp": "If the group claim contains this group, the user is granted the global administrator permission on login. If the group is no longer present, the permission is revoked on the next login. Leave empty to never touch permissions."
+    },
+    "configurationChangedSuccess": "Configuration changed"
+  },
+  "permissions": {
+    "configuration": {
+      "read,write": {
+        "oauth2": {
+          "displayName": "Modify OAuth2 configuration",
+          "description": "May modify the OAuth2/OIDC configuration"
+        }
+      }
+    }
+  }
+}

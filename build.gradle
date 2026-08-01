@@ -1,0 +1,45 @@
+/*
+ * Copyright (c) 2026 - present Thorsten Ludewig (t.ludewig@gmail.com)
+ *
+ * This program is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Affero General Public License as published by the Free
+ * Software Foundation, version 3.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see https://www.gnu.org/licenses/.
+ */
+
+plugins {
+  id 'org.scm-manager.smp' version '0.18.0'
+}
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  // define dependencies to other plugins here e.g.:
+  // plugin "sonia.scm.plugins:scm-mail-plugin:2.1.0"
+  // optionalPlugin "sonia.scm.plugins:scm-editor-plugin:2.0.0"
+}
+
+scmPlugin {
+  scmVersion = "3.9.0"
+  displayName = "OAuth2/OIDC Authentication Plugin"
+  description = "Authentication for SCM-Manager using OAuth2/OIDC"
+
+  // author = "Your name"
+  category = "Authentication"
+
+  openapi {
+    packages = [
+      "de.l9g.scm.oauth2.plugin",
+      "de.l9g.scm.oauth2.plugin.config"
+    ]
+  }
+}

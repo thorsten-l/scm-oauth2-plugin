@@ -1,0 +1,65 @@
+{
+  "scm-oauth2-plugin": {
+    "nav-link": "OAuth2 / OIDC",
+    "login": "Anmelden mit {{provider}}",
+    "loginForm": {
+      "username": "Benutzername",
+      "password": "Passwort",
+      "submit": "Anmelden"
+    },
+    "form": {
+      "header": "Globale OAuth2/OIDC Konfiguration",
+      "enabled": "Aktiviert",
+      "enabledHelp": "Wenn \"Aktiviert\", bietet der SCM-Manager eine Authentifizierung über OAuth2/OIDC an.",
+      "forceLogin": "Login erzwingen",
+      "forceLoginHelp": "Wenn aktiviert, werden nicht angemeldete Benutzer automatisch zum Identity Provider weitergeleitet. Eine konventionelle Anmeldung ist dann nicht mehr möglich.",
+      "ssoLogout": "Vollständiger SSO-Logout",
+      "ssoLogoutHelp": "Wenn aktiviert, beendet die Abmeldung vom SCM-Manager auch die SSO-Sitzung beim Identity Provider (RP-initiated Logout mit id_token_hint über den End Session Endpoint).",
+      "providerName": "Provider-Name",
+      "providerNameHelp": "Anzeigename des Identity Providers. Wird auf der Login-Seite als \"Anmelden mit <Provider-Name>\" angezeigt. Pflichtfeld, wenn die OAuth2-Authentifizierung aktiviert ist.",
+      "providerNameRequired": "Der Provider-Name ist erforderlich, wenn die OAuth2-Authentifizierung aktiviert ist.",
+      "endpoints": "Identity Provider Endpunkte",
+      "discoveryUrl": "OIDC Discovery URL",
+      "discoveryUrlHelp": "Issuer-URL oder vollständige URL des OIDC Discovery Dokuments (.well-known/openid-configuration). Wenn gesetzt, werden alle folgenden Endpunkte automatisch aus dem Discovery Dokument bezogen und die manuellen Einträge ignoriert.",
+      "authorizationUrl": "Authorization Endpoint",
+      "authorizationUrlHelp": "URL des Authorization Endpoints des Identity Providers, z. B. https://idp.example.com/realms/main/protocol/openid-connect/auth",
+      "tokenUrl": "Token Endpoint",
+      "tokenUrlHelp": "URL des Token Endpoints des Identity Providers.",
+      "userinfoUrl": "Userinfo Endpoint",
+      "userinfoUrlHelp": "URL des OIDC Userinfo Endpoints des Identity Providers.",
+      "endSessionUrl": "End Session Endpoint",
+      "endSessionUrlHelp": "URL des OIDC End Session Endpoints für den vollständigen SSO-Logout. Optional, nur nötig, wenn \"Vollständiger SSO-Logout\" aktiviert und keine Discovery URL gesetzt ist.",
+      "client": "Client",
+      "clientId": "Client ID",
+      "clientIdHelp": "Die beim Identity Provider registrierte Client ID.",
+      "clientSecret": "Client Secret",
+      "clientSecretHelp": "Das beim Identity Provider registrierte Client Secret. Es wird verschlüsselt gespeichert und von der API nie zurückgegeben. Leer lassen, um das gespeicherte Secret beizubehalten.",
+      "clientSecretStored": "unverändert (ein Secret ist gespeichert)",
+      "clientSecretNotStored": "noch kein Secret gespeichert",
+      "scopes": "Scopes",
+      "scopesHelp": "Durch Leerzeichen getrennte Liste der angeforderten Scopes, z. B. \"openid profile email\".",
+      "attributeMapping": "Attribut-Zuordnung",
+      "username": "Benutzername",
+      "usernameHelp": "Userinfo-Claim für den Benutzernamen (Fallback: \"sub\").",
+      "displayName": "Anzeigename",
+      "displayNameHelp": "Userinfo-Claim für den Anzeigenamen.",
+      "mail": "E-Mail",
+      "mailHelp": "Userinfo-Claim für die E-Mail-Adresse.",
+      "groups": "Gruppen",
+      "groupsHelp": "Userinfo-Claim für die Gruppenzugehörigkeiten.",
+      "adminGroup": "Administrator-Gruppe",
+      "adminGroupHelp": "Enthält der Gruppen-Claim diese Gruppe, erhält der Benutzer beim Login die globale Administrator-Berechtigung. Fehlt die Gruppe wieder, wird die Berechtigung beim nächsten Login entzogen. Leer lassen, um Berechtigungen nie anzufassen."
+    },
+    "configurationChangedSuccess": "Konfiguration geändert"
+  },
+  "permissions": {
+    "configuration": {
+      "read,write": {
+        "oauth2": {
+          "displayName": "OAuth2 Konfiguration ändern",
+          "description": "Darf die OAuth2/OIDC Konfiguration ändern"
+        }
+      }
+    }
+  }
+}
