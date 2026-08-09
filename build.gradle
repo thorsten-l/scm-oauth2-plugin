@@ -22,6 +22,23 @@ repositories {
   mavenCentral()
 }
 
+configurations.all {
+  resolutionStrategy.eachDependency { details ->
+    // The smp plugin pins lombok 1.18.30, which only supports jdk 21. IDEs
+    // running on a newer jvm (NetBeans ships its own jdk) cannot process the
+    // annotations with it and mark every generated getter as an error.
+    if (details.requested.group == 'org.projectlombok' && details.requested.name == 'lombok') {
+      details.useVersion '1.18.46'
+      details.because 'the pinned version does not support current jdks'
+    }
+  }
+}
+
+tasks.withType(Javadoc) {
+  // do not complain about missing javadoc, real javadoc errors stay visible
+  options.addStringOption('Xdoclint:all,-missing', '-quiet')
+}
+
 dependencies {
   // define dependencies to other plugins here e.g.:
   // plugin "sonia.scm.plugins:scm-mail-plugin:2.1.0"

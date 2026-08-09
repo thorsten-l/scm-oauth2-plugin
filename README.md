@@ -38,6 +38,64 @@ any spec compliant identity provider (IdP).
   the browser returns to the SCM login page
 * The client secret is stored **encrypted** and is never returned by the API
 
+## Installation
+
+The plugin is not part of the official plugin center and is therefore installed manually. It
+requires **SCM-Manager 3.9.0 or newer**.
+
+1. Download `scm-oauth2-plugin.smp` from the
+   [releases page](https://github.com/thorsten-l/scm-oauth2-plugin/releases)
+2. Copy the file into the `plugins` directory of your SCM-Manager home, e.g.
+
+   ```bash
+   cp scm-oauth2-plugin.smp /var/lib/scm/plugins/
+   ```
+
+3. Restart SCM-Manager. The archive is unpacked during startup — afterwards the directory
+   `plugins/scm-oauth2-plugin/` exists and the `.smp` file is gone, which is expected.
+4. Verify the installation in *Administration → Plugins → Installed*, or via REST:
+
+   ```bash
+   curl -u "scmadmin:secret" http://localhost:8080/scm/api/v2/plugins/installed \
+     | grep -o '"name":"scm-oauth2-plugin","version":"[^"]*"'
+   ```
+
+Afterwards configure the plugin as described under [Configuration](#configuration).
+
+### Finding the home directory
+
+The home directory is the one containing `config/`, `repositories/` and `plugins/`. The reliable
+way to find it is the log entry written on every startup:
+
+```bash
+grep "scm home directory" /var/log/scm/scm-manager.log
+# using directory /var/lib/scm as scm home directory
+```
+
+Typical defaults, unless overridden by the environment variable `SCM_HOME` or the system property
+`scm.home`:
+
+| Installation | Home directory |
+|---|---|
+| Linux package / Docker | `/var/lib/scm` |
+| macOS | `~/Library/Application Support/SCM-Manager` |
+| Windows | `%APPDATA%\SCM-Manager` |
+
+### Update
+
+Since the archive is unpacked, an old version has to be removed first, otherwise the previous
+plugin directory stays in place:
+
+```bash
+# stop SCM-Manager first
+rm -rf /var/lib/scm/plugins/scm-oauth2-plugin
+cp scm-oauth2-plugin.smp /var/lib/scm/plugins/
+# start SCM-Manager
+```
+
+The configuration is stored in `config/oauth2.xml` and survives an update. To uninstall, remove the
+plugin directory and restart.
+
 ## How it works
 
 ### Login
