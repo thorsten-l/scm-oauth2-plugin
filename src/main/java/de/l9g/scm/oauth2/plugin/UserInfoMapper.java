@@ -45,11 +45,16 @@ public class UserInfoMapper {
     this.context = context;
   }
 
+  /**
+   * Creates a user from the claims. Attributes which the identity provider does
+   * not deliver are left empty on purpose, so that {@link UserMigration} can
+   * keep the stored value of an already existing account.
+   */
   public User createUser(JsonNode userInfo) {
     String username = getUsername(userInfo);
 
     User user = new User(username);
-    user.setDisplayName(getDisplayName(userInfo, username));
+    user.setDisplayName(getStringClaim(userInfo, context.get().getDisplayNameAttribute()));
     setEmail(userInfo, user);
     user.setExternal(true);
 
@@ -84,16 +89,11 @@ public class UserInfoMapper {
     return username;
   }
 
-  private String getDisplayName(JsonNode userInfo, String username) {
-    String displayName = getStringClaim(userInfo, context.get().getDisplayNameAttribute());
-    return displayName != null ? displayName : username;
-  }
-
   private void setEmail(JsonNode userInfo, User user) {
     String mail = getStringClaim(userInfo, context.get().getMailAttribute());
     if (ValidationUtil.isMailAddressValid(mail)) {
       user.setMail(mail);
-    } else {
+    } else if (!Strings.isNullOrEmpty(mail)) {
       LOG.info("found invalid email address '{}' for oauth2 user '{}'; leaving email blank", mail, user.getName());
     }
   }

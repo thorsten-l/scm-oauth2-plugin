@@ -58,6 +58,7 @@ public class ConfigurationDto extends HalRepresentation {
 
   private boolean forceLogin;
   private boolean ssoLogout;
+  private boolean migrateLocalUsers;
 
   private boolean enabled;
 

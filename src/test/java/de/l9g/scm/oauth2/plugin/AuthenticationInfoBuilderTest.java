@@ -63,6 +63,9 @@ class AuthenticationInfoBuilderTest {
   private GroupSynchronizer groupSynchronizer;
 
   @Mock
+  private UserMigration userMigration;
+
+  @Mock
   private AuthenticationInfo authenticationInfo;
 
   @Test
@@ -75,11 +78,12 @@ class AuthenticationInfoBuilderTest {
     when(restClient.exchangeCodeForToken(CODE, REDIRECT_URI, VERIFIER)).thenReturn(new TokenResponse(ACCESS_TOKEN, "id-token"));
     when(restClient.fetchUserInfo(ACCESS_TOKEN)).thenReturn(userInfo);
     when(userInfoMapper.createUser(userInfo)).thenReturn(user);
+    when(userMigration.prepare(user)).thenReturn(user);
     when(userInfoMapper.createGroups(userInfo)).thenReturn(groups);
     when(groupStore.get("trillian")).thenReturn(previousGroups);
     when(syncingRealmHelper.createAuthenticationInfo(any(), any(User.class))).thenReturn(authenticationInfo);
 
-    AuthenticationInfoBuilder builder = new AuthenticationInfoBuilder(restClient, userInfoMapper, syncingRealmHelper, groupStore, idTokenStore, adminGroupSynchronizer, groupSynchronizer);
+    AuthenticationInfoBuilder builder = new AuthenticationInfoBuilder(restClient, userInfoMapper, syncingRealmHelper, groupStore, idTokenStore, adminGroupSynchronizer, groupSynchronizer, userMigration);
     AuthenticationInfo result = builder.create(CODE, REDIRECT_URI, VERIFIER);
 
     assertThat(result).isSameAs(authenticationInfo);

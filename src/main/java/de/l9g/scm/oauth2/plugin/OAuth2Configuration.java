@@ -63,6 +63,13 @@ public class OAuth2Configuration {
   private boolean forceLogin = false;
   private boolean ssoLogout = false;
 
+  /**
+   * Allows the identity provider to take over accounts which can still be used
+   * for a local password login. Users of other external authentications (ldap,
+   * cas) are migrated without this flag.
+   */
+  private boolean migrateLocalUsers = false;
+
   private boolean enabled;
 
 }

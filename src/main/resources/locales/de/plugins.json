@@ -15,6 +15,8 @@
       "forceLoginHelp": "Wenn aktiviert, werden nicht angemeldete Benutzer automatisch zum Identity Provider weitergeleitet. Eine konventionelle Anmeldung ist dann nicht mehr möglich.",
       "ssoLogout": "Vollständiger SSO-Logout",
       "ssoLogoutHelp": "Wenn aktiviert, beendet die Abmeldung vom SCM-Manager auch die SSO-Sitzung beim Identity Provider (RP-initiated Logout mit id_token_hint über den End Session Endpoint).",
+      "migrateLocalUsers": "Lokale Konten übernehmen",
+      "migrateLocalUsersHelp": "Wenn aktiviert, übernimmt der Identity Provider auch Konten, die noch ein lokales Passwort haben (das Passwort wird dabei entfernt). Benutzer aus anderen externen Anmeldungen (z. B. LDAP) werden immer automatisch übernommen. Ohne diese Option wird die Anmeldung abgelehnt, wenn ein gleichnamiges lokales Konto existiert.",
       "providerName": "Provider-Name",
       "providerNameHelp": "Anzeigename des Identity Providers. Wird auf der Login-Seite als \"Anmelden mit <Provider-Name>\" angezeigt. Pflichtfeld, wenn die OAuth2-Authentifizierung aktiviert ist.",
       "providerNameRequired": "Der Provider-Name ist erforderlich, wenn die OAuth2-Authentifizierung aktiviert ist.",

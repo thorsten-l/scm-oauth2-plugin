@@ -33,9 +33,10 @@ public class AuthenticationInfoBuilder {
   private final IdTokenStore idTokenStore;
   private final AdminGroupSynchronizer adminGroupSynchronizer;
   private final GroupSynchronizer groupSynchronizer;
+  private final UserMigration userMigration;
 
   @Inject
-  public AuthenticationInfoBuilder(OAuth2RestClient restClient, UserInfoMapper userInfoMapper, SyncingRealmHelper syncingRealmHelper, GroupStore groupStore, IdTokenStore idTokenStore, AdminGroupSynchronizer adminGroupSynchronizer, GroupSynchronizer groupSynchronizer) {
+  public AuthenticationInfoBuilder(OAuth2RestClient restClient, UserInfoMapper userInfoMapper, SyncingRealmHelper syncingRealmHelper, GroupStore groupStore, IdTokenStore idTokenStore, AdminGroupSynchronizer adminGroupSynchronizer, GroupSynchronizer groupSynchronizer, UserMigration userMigration) {
     this.restClient = restClient;
     this.userInfoMapper = userInfoMapper;
     this.syncingRealmHelper = syncingRealmHelper;
@@ -43,13 +44,14 @@ public class AuthenticationInfoBuilder {
     this.idTokenStore = idTokenStore;
     this.adminGroupSynchronizer = adminGroupSynchronizer;
     this.groupSynchronizer = groupSynchronizer;
+    this.userMigration = userMigration;
   }
 
   public AuthenticationInfo create(String code, String redirectUri, String codeVerifier) {
     TokenResponse tokens = restClient.exchangeCodeForToken(code, redirectUri, codeVerifier);
     JsonNode userInfo = restClient.fetchUserInfo(tokens.getAccessToken());
 
-    User user = userInfoMapper.createUser(userInfo);
+    User user = userMigration.prepare(userInfoMapper.createUser(userInfo));
     syncingRealmHelper.store(user);
 
     Set<String> previousGroups = groupStore.get(user.getName());

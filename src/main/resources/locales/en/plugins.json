@@ -15,6 +15,8 @@
       "forceLoginHelp": "If checked, unauthenticated users are redirected to the identity provider automatically. Conventional authentication is no longer possible.",
       "ssoLogout": "Full SSO logout",
       "ssoLogoutHelp": "If checked, logging out of SCM-Manager also terminates the SSO session at the identity provider (RP-initiated logout with id_token_hint via the end session endpoint).",
+      "migrateLocalUsers": "Take over local accounts",
+      "migrateLocalUsersHelp": "If checked, the identity provider also takes over accounts which still have a local password (the password is removed in that case). Users of other external authentications (e.g. ldap) are always migrated automatically. Without this option the login is rejected if a local account with the same name exists.",
       "providerName": "Provider name",
       "providerNameHelp": "Display name of the identity provider. Shown on the login page as \"Login with <provider name>\". Required if oauth2 authentication is enabled.",
       "providerNameRequired": "The provider name is required if oauth2 authentication is enabled.",

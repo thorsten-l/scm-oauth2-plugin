@@ -69,7 +69,8 @@ class UserInfoMapperTest {
     User user = mapper.createUser(userInfo);
 
     assertThat(user.getName()).isEqualTo("4711");
-    assertThat(user.getDisplayName()).isEqualTo("4711");
+    // the display name is left empty on purpose, so that a stored one survives
+    assertThat(user.getDisplayName()).isNull();
   }
 
   @Test

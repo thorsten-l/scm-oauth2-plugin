@@ -37,6 +37,7 @@ type GlobalConfiguration = {
   adminGroup: string;
   forceLogin: boolean;
   ssoLogout: boolean;
+  migrateLocalUsers: boolean;
   enabled: boolean;
   _links: Links;
 };
@@ -83,6 +84,14 @@ class GlobalOAuth2ConfigurationForm extends React.Component<Props, State> {
           label={t("scm-oauth2-plugin.form.ssoLogout")}
           helpText={t("scm-oauth2-plugin.form.ssoLogoutHelp")}
           checked={this.state.ssoLogout}
+          disabled={!this.state.enabled}
+          onChange={this.valueChangeHandler}
+        />
+        <Checkbox
+          name="migrateLocalUsers"
+          label={t("scm-oauth2-plugin.form.migrateLocalUsers")}
+          helpText={t("scm-oauth2-plugin.form.migrateLocalUsersHelp")}
+          checked={this.state.migrateLocalUsers}
           disabled={!this.state.enabled}
           onChange={this.valueChangeHandler}
         />

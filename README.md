@@ -74,6 +74,7 @@ Administration → Settings → OAuth2 / OIDC, or via REST (see below).
 | Enabled | `enabled` | `false` | Master switch for the plugin |
 | Force login | `forceLogin` | `false` | Redirect unauthenticated browsers to the IdP automatically; conventional login is no longer possible |
 | Full SSO logout | `ssoLogout` | `false` | RP-initiated logout at the IdP (see above) |
+| Take over local accounts | `migrateLocalUsers` | `false` | Allows the IdP to take over accounts which still have a local password, see [Migration of existing users](#migration-of-existing-users) |
 | Provider name | `providerName` | — | Display name of the IdP, shown as "Login with &lt;provider name&gt;". **Required** if the plugin is enabled |
 | OIDC Discovery URL | `discoveryUrl` | — | Issuer url or complete url of the `.well-known/openid-configuration` document. If set, all four endpoints below are resolved automatically (cached for one hour) and the manual entries are ignored |
 | Authorization endpoint | `authorizationUrl` | — | Manual endpoint configuration (only used without discovery url) |
@@ -121,6 +122,40 @@ curl -u "scmadmin:secret" -H "Content-Type: application/vnd.scmm-oauth2Config+js
 
 `GET` on the same url returns the current configuration. Setting `enabled: true` without a
 `providerName` is rejected with `400 Bad Request`.
+
+## Migration of existing users
+
+Users are identified by the username claim, so an instance which already
+authenticates against another source (e.g. LDAP) can be switched to OAuth2
+without losing anything, as long as the identity provider delivers the **same
+user names**. On the first OAuth2 login the existing account is reused, which
+keeps everything that is bound to the user name:
+
+* assigned permissions and repository ownership
+* group memberships (existing memberships are never removed on the first login,
+  because the plugin only removes a user from groups which it added itself in a
+  previous login)
+* api keys and public keys
+
+Attributes which the identity provider does **not** deliver keep their stored
+value — a missing mail claim does not wipe the mail address of a migrated user.
+The stored `active` flag is preserved as well, so a deactivated account is not
+reactivated by a login.
+
+Accounts which can still be used for a **local password login** are not taken
+over by default: the login is rejected with a warning in the log, because
+otherwise a user of the identity provider could seize a local account (e.g. the
+initial `scmadmin`) just by using its name. Users of other external
+authentications (LDAP, CAS) have no local password and are migrated silently.
+To migrate local accounts as well, enable *Take over local accounts*
+(`migrateLocalUsers`) — their local password is removed in that case, because
+the account is authenticated by the identity provider from then on.
+
+To check upfront how an existing user is stored:
+
+```bash
+curl -u "scmadmin:secret" https://scm.example.com/scm/api/v2/users/<username> | grep -o '"external":[a-z]*'
+```
 
 ## Group and permission synchronization
 
