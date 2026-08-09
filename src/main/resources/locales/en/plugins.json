@@ -49,6 +49,10 @@
       "mailHelp": "Userinfo claim used as email address.",
       "groups": "Groups",
       "groupsHelp": "Userinfo claim used for group memberships.",
+      "importRealmRoles": "Import realm roles from access token",
+      "importRealmRolesHelp": "If checked, roles from the access token are used in addition to the groups of the userinfo response. Useful for identity providers which deliver roles only in the token (e.g. keycloak realm roles).",
+      "realmRolesPath": "JSON path of the roles",
+      "realmRolesPathHelp": "Path to the roles inside the access token, field names separated by dots, e.g. \"realm_access.roles\" for realm roles or \"resource_access.<client-id>.roles\" for client roles.",
       "adminGroup": "Administrator group",
       "adminGroupHelp": "If the group claim contains this group, the user is granted the global administrator permission on login. If the group is no longer present, the permission is revoked on the next login. Leave empty to never touch permissions."
     },

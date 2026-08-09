@@ -33,10 +33,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Provider;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
-import java.io.IOException;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.Optional;
 
 import static java.util.Optional.empty;
@@ -165,20 +162,9 @@ public class AfterLogoutRedirectToIdp implements LogoutRedirection {
    * verified, because the value is only used as key for the id token store.
    */
   private Optional<String> subjectFromJwt(String jwt) {
-    String[] parts = jwt.split("\\.");
-    if (parts.length < 2) {
-      return empty();
-    }
-    try {
-      byte[] payload = Base64.getUrlDecoder().decode(parts[1]);
-      JsonNode json = objectMapper.readTree(new String(payload, StandardCharsets.UTF_8));
-      JsonNode sub = json.get("sub");
-      if (sub != null && !sub.isNull()) {
-        return of(sub.asText());
-      }
-    } catch (IOException | IllegalArgumentException ex) {
-      LOG.debug("failed to parse access token payload", ex);
-    }
-    return empty();
+    return JwtPayload.read(jwt, objectMapper)
+      .map(payload -> payload.get("sub"))
+      .filter(sub -> !sub.isNull())
+      .map(JsonNode::asText);
   }
 }

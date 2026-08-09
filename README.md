@@ -13,7 +13,8 @@ any spec compliant identity provider (IdP).
 
 ## Features
 
-* **Authorization code flow** with a confidential client (client id + client secret)
+* **Authorization code flow** with a confidential client (client id + client secret) and
+  **PKCE** (S256)
 * **OIDC discovery**: all endpoints can be resolved automatically from the
   `.well-known/openid-configuration` document of the IdP — alternatively all endpoints can be
   configured manually
@@ -21,8 +22,13 @@ any spec compliant identity provider (IdP).
   conventional username/password form
 * **User synchronization**: users are created as *external* users on first login; display name and
   email are updated from the configured userinfo claims on every login
+* **Migration of existing users**: an instance which already authenticates against LDAP (or any
+  other source) can be switched over without losing permissions, ownership or memberships, as long
+  as the IdP delivers the same user names
 * **Group synchronization**: groups from the group claim are created as SCM groups if missing and
   the user is added to/removed from them on every login — groups are never deleted
+* **Roles from the access token** (optional): read additional roles from a configurable JSON path
+  inside the access token, e.g. the Keycloak realm roles at `realm_access.roles`
 * **Administrator group**: members of a configurable group get the global administrator
   permission assigned on login (and revoked again, if the group membership is gone)
 * **Force login** (optional): unauthenticated browser requests are redirected to the IdP
@@ -30,6 +36,7 @@ any spec compliant identity provider (IdP).
 * **Full SSO logout** (optional): RP-initiated logout at the IdP with `id_token_hint` and
   `post_logout_redirect_uri`, so the complete SSO session ends without a confirmation prompt and
   the browser returns to the SCM login page
+* The client secret is stored **encrypted** and is never returned by the API
 
 ## How it works
 
@@ -37,20 +44,22 @@ any spec compliant identity provider (IdP).
 
 1. The user clicks "Login with &lt;provider&gt;" (or is redirected by the force login filter) —
    `GET /api/v2/oauth2/auth?from=<original url>`
-2. The plugin stores a random `state` (CSRF protection, valid once, 10 minutes) and redirects the
-   browser to the authorization endpoint of the IdP
+2. The plugin creates a random `state` (CSRF protection, valid once, 10 minutes) plus a PKCE
+   verifier, stores the `state` in an `HttpOnly` cookie of this browser and redirects to the
+   authorization endpoint of the IdP (with `code_challenge`, if the IdP supports S256)
 3. After authentication the IdP redirects back to the callback
    `GET /api/v2/oauth2/auth/callback?code=...&state=...`
-4. The plugin validates the `state`, exchanges the authorization code for tokens at the token
-   endpoint (server-to-server, `client_secret_post`) and fetches the user claims from the
-   **userinfo endpoint**
-5. The user is created/updated, groups and permissions are synchronized, the id token is kept in
-   memory for a later SSO logout and an SCM access token cookie is issued
+4. The plugin checks that the `state` belongs to the state cookie of this browser, exchanges the
+   authorization code for tokens at the token endpoint (server-to-server, `client_secret_post`,
+   with `code_verifier`) and fetches the user claims from the **userinfo endpoint**
+5. The user is created/updated/migrated, groups and permissions are synchronized, the id token is
+   kept in memory for a later SSO logout and an SCM access token cookie is issued
 6. The browser is redirected to the originally requested url
 
-> **Important:** the plugin reads all claims (username, display name, email, groups) from the
+> **Important:** the plugin reads the claims (username, display name, email, groups) from the
 > **userinfo endpoint** — not from the access or id token. Make sure your IdP adds the claims to
-> the userinfo response (in Keycloak: protocol mapper setting *Add to userinfo*).
+> the userinfo response (in Keycloak: protocol mapper setting *Add to userinfo*). The only
+> exception is the optional [role import](#roles-from-the-access-token) from the access token.
 
 ### Logout (optional, `ssoLogout`)
 
@@ -82,12 +91,14 @@ Administration → Settings → OAuth2 / OIDC, or via REST (see below).
 | Userinfo endpoint | `userinfoUrl` | — | " |
 | End session endpoint | `endSessionUrl` | — | ", optional; only needed for `ssoLogout` |
 | Client ID | `clientId` | — | Client registered at the IdP |
-| Client secret | `clientSecret` | — | Secret of the (confidential) client |
+| Client secret | `clientSecret` | — | Secret of the (confidential) client. Stored encrypted, never returned by `GET`; send an empty value on update to keep the stored secret (the read-only flag `clientSecretSet` tells whether one is stored) |
 | Scopes | `scopes` | `openid profile email` | Space separated list of requested scopes |
 | Username claim | `usernameAttribute` | `preferred_username` | Userinfo claim used as SCM username (falls back to `sub`) |
 | Display name claim | `displayNameAttribute` | `name` | Userinfo claim for the display name |
 | Mail claim | `mailAttribute` | `email` | Userinfo claim for the email address (invalid addresses are ignored) |
 | Group claim | `groupAttribute` | `groups` | Userinfo claim for group memberships (string or array of strings) |
+| Import realm roles from access token | `importRealmRoles` | `false` | Additionally read roles from the access token, see below |
+| JSON path of the roles | `realmRolesPath` | `realm_access.roles` | Path to the roles inside the access token, field names separated by dots |
 | Administrator group | `adminGroup` | `scmadmin` | Members of this group get the global administrator permission on login, non-members get it revoked. Empty = permissions are never touched |
 
 ### Redirect URI
@@ -114,6 +125,9 @@ curl -u "scmadmin:secret" -H "Content-Type: application/vnd.scmm-oauth2Config+js
   "mailAttribute": "email",
   "groupAttribute": "groups",
   "adminGroup": "scmadmin",
+  "importRealmRoles": false,
+  "realmRolesPath": "realm_access.roles",
+  "migrateLocalUsers": false,
   "forceLogin": false,
   "ssoLogout": true,
   "enabled": true
@@ -170,10 +184,57 @@ On **every** login the group claim is compared with the state of the previous lo
 * Memberships which were assigned manually in other groups are **not** touched — only groups
   that came from the claim of this user are considered for removal
 * *External* groups are skipped, their members are not managed by SCM-Manager
+* A failure while synchronizing a group never prevents the login itself
+
+Characters which SCM-Manager does not allow in a name (`/ : ? # ; & = % \`, a leading `@` and
+leading/trailing whitespace) are **replaced by an underscore**, so no group is lost. A Keycloak
+group mapper with *Full group path* enabled therefore results in:
+
+| Claim | SCM group |
+|---|---|
+| `/developers` | `_developers` |
+| `/team/backend` | `_team_backend` |
+| `SCM RZ-intern` | `SCM RZ-intern` (unchanged, internal blanks are allowed) |
+
+The sanitized name is used consistently — for the created group, for the membership and for the
+authorization — so permissions granted to the group really apply. Keep that in mind for the
+**administrator group**: if the identity provider sends `/scmadmin`, the setting has to be
+`_scmadmin`. Two claim values which only differ in invalid characters (`a/b` and `a:b`) end up in
+the same SCM group.
 
 Additionally the effective groups of the user are resolved directly from the claim at
 authorization time (group resolver), so permissions assigned to a group name work even before the
 group entity exists.
+
+### Roles from the access token
+
+Some identity providers deliver roles only in the access token and not in the
+userinfo response — Keycloak realm roles are the typical example. With
+*Import realm roles from access token* (`importRealmRoles`) these roles are read
+from the token and **added** to the groups of the userinfo response. The
+location is configured as a dot separated path (`realmRolesPath`):
+
+| Path | Reads |
+|---|---|
+| `realm_access.roles` | Keycloak realm roles (default) |
+| `resource_access.<client-id>.roles` | Keycloak client roles of that client |
+| `groups` | a top level claim of the token |
+
+The path may also contain array indexes (`realm_access.roles.0`). Both arrays
+and single string values are accepted. If the access token is not a JWT (some
+providers issue opaque tokens) or the path does not exist, no roles are
+imported and the login continues normally.
+
+The signature of the access token is not verified for this, which is safe
+because the token was received directly from the token endpoint of the
+configured identity provider over TLS — the same trust level as the userinfo
+response.
+
+> **Note:** every imported role becomes an SCM group (see below). Keycloak realm
+> roles often include many technical roles (`offline_access`,
+> `uma_authorization`, `default-roles-<realm>`, …), so the group list can grow
+> considerably. If only a few roles are relevant, a client role mapper with
+> `resource_access.<client-id>.roles` is the more targeted choice.
 
 If the group claim contains the configured **administrator group** (default `scmadmin`), the user
 gets the *global administrator* permission (`*`) assigned; if the group is missing, a previously
@@ -181,12 +242,41 @@ assigned permission is revoked on the next login. With a configured admin group 
 single source of truth for this one permission — manually granting it to an OAuth2 user without
 the group does not survive the next login. Leave the field empty to disable this mechanism.
 
+## Security notes
+
+The plugin implements the current recommendations for the authorization code flow
+(RFC 6749/9700):
+
+* the `state` is bound to the browser which started the flow via an `HttpOnly`, `SameSite=Lax`
+  cookie (`Secure` as soon as the instance runs on HTTPS), so an authorization code of a foreign
+  session cannot be replayed into somebody else's browser
+* **PKCE** with S256; the verifier never leaves the server. It is omitted only if the discovery
+  document explicitly advertises no support for it
+* the client secret is stored encrypted and is write-only in the API
+* only absolute `http`/`https` urls are accepted as endpoints
+* the forced login only lets requests pass whose access token cookie can actually be validated
+  (signature, expiry)
+* error details of the identity provider are written to the log only, never into the response
+
+Two points to keep in mind when operating the plugin:
+
+* **Whoever controls the group names in the IdP controls the permissions in SCM-Manager** — the
+  claim decides about group memberships and, via the administrator group, about global admin
+  rights. Groups/roles should therefore be maintained by IdP administrators only (Keycloak client
+  roles are a good fit).
+* **The permission `configuration:write:oauth2` has to be treated like global admin**: whoever may
+  change the configuration can point the endpoints at a different host and thereby both receive the
+  client secret and take over the authentication completely.
+
+Run the instance behind TLS — the client secret is transmitted in the body when the configuration
+is saved, and the session cookie is only marked `Secure` on an HTTPS connection.
+
 ## Keycloak example
 
 [`scm-server.json`](scm-server.json) contains an export of a working sample client for the setup
 described above (SCM-Manager reachable at `http://scm-server.localhost:8080/scm`). Import it in
-the Keycloak admin console via *Clients → Import client* and regenerate the client secret —
-**the secret contained in the file is a sample and must not be used in production**.
+the Keycloak admin console via *Clients → Import client* and generate a client secret afterwards —
+the file contains the placeholder `GENERATE_YOUR_OWN_SECRET_IN_KEYCLOAK` instead of a real secret.
 
 The important settings of the sample client:
 
@@ -196,7 +286,8 @@ The important settings of the sample client:
 * **Redirect uri**: `/scm/api/v2/oauth2/auth/callback` (relative to the root url
   `http://scm-server.localhost:8080`)
 * **Post logout redirect uri** (`attributes."post.logout.redirect.uris"`):
-  `http://scm-server.localhost:8080/scm*` — required for the full SSO logout
+  `http://scm-server.localhost:8080/scm` — required for the full SSO logout (adjust it to your
+  base url; avoid wildcards in production)
 * **Logout confirmation disabled** (`attributes."logout.confirmation.enabled": "false"`), so the
   RP-initiated logout runs without user interaction
 * **Groups claim via client roles**: the protocol mapper `client roles`

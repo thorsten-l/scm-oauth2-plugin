@@ -60,6 +60,13 @@ public class OAuth2Configuration {
   private String groupAttribute = "groups";
   private String adminGroup = "scmadmin";
 
+  /**
+   * Reads additional groups from the access token, e.g. the keycloak realm
+   * roles, which are not part of the userinfo response.
+   */
+  private boolean importRealmRoles = false;
+  private String realmRolesPath = "realm_access.roles";
+
   private boolean forceLogin = false;
   private boolean ssoLogout = false;
 

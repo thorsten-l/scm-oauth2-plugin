@@ -56,6 +56,9 @@ public class ConfigurationDto extends HalRepresentation {
   private String groupAttribute;
   private String adminGroup;
 
+  private boolean importRealmRoles;
+  private String realmRolesPath;
+
   private boolean forceLogin;
   private boolean ssoLogout;
   private boolean migrateLocalUsers;

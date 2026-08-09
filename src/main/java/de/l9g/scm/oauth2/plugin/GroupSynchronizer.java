@@ -90,19 +90,15 @@ public class GroupSynchronizer {
   }
 
   /**
-   * SCM-Manager does not allow some characters in group names, which the
-   * identity provider may well use. Such groups are skipped, because creating
-   * them would fail with a constraint violation.
+   * Names are already mapped to valid ones by {@link GroupNameSanitizer}, this
+   * is only a last guard so that an unexpected name cannot break the login with
+   * a constraint violation.
    */
   private boolean isValidGroupName(String groupName) {
     if (ValidationUtil.isNameValid(groupName)) {
       return true;
     }
-    LOG.warn(
-      "skipping group '{}' from the group claim, because it is not a valid scm group name; "
-        + "if the identity provider sends full group paths, disable that option in its mapper configuration",
-      groupName
-    );
+    LOG.warn("skipping group '{}', because it is not a valid scm group name", groupName);
     return false;
   }
 

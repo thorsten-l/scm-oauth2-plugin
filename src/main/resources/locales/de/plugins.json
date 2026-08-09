@@ -49,6 +49,10 @@
       "mailHelp": "Userinfo-Claim für die E-Mail-Adresse.",
       "groups": "Gruppen",
       "groupsHelp": "Userinfo-Claim für die Gruppenzugehörigkeiten.",
+      "importRealmRoles": "Importiere Realm-Rollen aus AccessToken",
+      "importRealmRolesHelp": "Wenn aktiviert, werden zusätzlich zu den Gruppen aus der Userinfo auch Rollen aus dem Access Token übernommen. Nützlich bei Identity Providern, die Rollen nur im Token ausliefern (z. B. Keycloak Realm-Rollen).",
+      "realmRolesPath": "JSON-Pfad der Rollen",
+      "realmRolesPathHelp": "Pfad zu den Rollen im Access Token, Feldnamen durch Punkte getrennt, z. B. \"realm_access.roles\" für Realm-Rollen oder \"resource_access.<client-id>.roles\" für Client-Rollen.",
       "adminGroup": "Administrator-Gruppe",
       "adminGroupHelp": "Enthält der Gruppen-Claim diese Gruppe, erhält der Benutzer beim Login die globale Administrator-Berechtigung. Fehlt die Gruppe wieder, wird die Berechtigung beim nächsten Login entzogen. Leer lassen, um Berechtigungen nie anzufassen."
     },

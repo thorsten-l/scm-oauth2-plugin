@@ -35,6 +35,8 @@ type GlobalConfiguration = {
   mailAttribute: string;
   groupAttribute: string;
   adminGroup: string;
+  importRealmRoles: boolean;
+  realmRolesPath: string;
   forceLogin: boolean;
   ssoLogout: boolean;
   migrateLocalUsers: boolean;
@@ -226,6 +228,22 @@ class GlobalOAuth2ConfigurationForm extends React.Component<Props, State> {
             helpText={t("scm-oauth2-plugin.form.adminGroupHelp")}
             disabled={!this.state.enabled}
             value={this.state.adminGroup}
+            onChange={this.valueChangeHandler}
+          />
+          <Checkbox
+            name="importRealmRoles"
+            label={t("scm-oauth2-plugin.form.importRealmRoles")}
+            helpText={t("scm-oauth2-plugin.form.importRealmRolesHelp")}
+            checked={this.state.importRealmRoles}
+            disabled={!this.state.enabled}
+            onChange={this.valueChangeHandler}
+          />
+          <InputField
+            name="realmRolesPath"
+            label={t("scm-oauth2-plugin.form.realmRolesPath")}
+            helpText={t("scm-oauth2-plugin.form.realmRolesPathHelp")}
+            disabled={!this.state.enabled || !this.state.importRealmRoles}
+            value={this.state.realmRolesPath}
             onChange={this.valueChangeHandler}
           />
         </div>

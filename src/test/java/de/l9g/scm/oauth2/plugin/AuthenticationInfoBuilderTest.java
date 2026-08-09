@@ -66,6 +66,9 @@ class AuthenticationInfoBuilderTest {
   private UserMigration userMigration;
 
   @Mock
+  private AccessTokenRoleReader accessTokenRoleReader;
+
+  @Mock
   private AuthenticationInfo authenticationInfo;
 
   @Test
@@ -73,6 +76,8 @@ class AuthenticationInfoBuilderTest {
     JsonNode userInfo = new ObjectMapper().readTree("{\"preferred_username\":\"trillian\"}");
     User user = new User("trillian");
     Set<String> groups = Set.of("heartOfGold");
+    // the slash of the realm role is replaced on the way
+    Set<String> merged = Set.of("heartOfGold", "_realm-role");
 
     Set<String> previousGroups = Set.of("restaurantAtTheEndOfTheUniverse");
     when(restClient.exchangeCodeForToken(CODE, REDIRECT_URI, VERIFIER)).thenReturn(new TokenResponse(ACCESS_TOKEN, "id-token"));
@@ -80,18 +85,19 @@ class AuthenticationInfoBuilderTest {
     when(userInfoMapper.createUser(userInfo)).thenReturn(user);
     when(userMigration.prepare(user)).thenReturn(user);
     when(userInfoMapper.createGroups(userInfo)).thenReturn(groups);
+    when(accessTokenRoleReader.read(ACCESS_TOKEN)).thenReturn(Set.of("/realm-role"));
     when(groupStore.get("trillian")).thenReturn(previousGroups);
     when(syncingRealmHelper.createAuthenticationInfo(any(), any(User.class))).thenReturn(authenticationInfo);
 
-    AuthenticationInfoBuilder builder = new AuthenticationInfoBuilder(restClient, userInfoMapper, syncingRealmHelper, groupStore, idTokenStore, adminGroupSynchronizer, groupSynchronizer, userMigration);
+    AuthenticationInfoBuilder builder = new AuthenticationInfoBuilder(restClient, userInfoMapper, syncingRealmHelper, groupStore, idTokenStore, adminGroupSynchronizer, groupSynchronizer, userMigration, accessTokenRoleReader);
     AuthenticationInfo result = builder.create(CODE, REDIRECT_URI, VERIFIER);
 
     assertThat(result).isSameAs(authenticationInfo);
     verify(syncingRealmHelper).store(user);
-    verify(groupStore).put("trillian", groups);
-    verify(groupSynchronizer).sync("trillian", previousGroups, groups);
+    verify(groupStore).put("trillian", merged);
+    verify(groupSynchronizer).sync("trillian", previousGroups, merged);
     verify(idTokenStore).put("trillian", "id-token");
-    verify(adminGroupSynchronizer).sync("trillian", groups);
+    verify(adminGroupSynchronizer).sync("trillian", merged);
     verify(syncingRealmHelper).createAuthenticationInfo(Constants.NAME, user);
   }
 }

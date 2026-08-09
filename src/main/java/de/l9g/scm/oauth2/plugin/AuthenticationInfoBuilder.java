@@ -17,6 +17,7 @@
 package de.l9g.scm.oauth2.plugin;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.google.common.collect.ImmutableSet;
 import org.apache.shiro.authc.AuthenticationInfo;
 import sonia.scm.security.SyncingRealmHelper;
 import sonia.scm.user.User;
@@ -34,9 +35,10 @@ public class AuthenticationInfoBuilder {
   private final AdminGroupSynchronizer adminGroupSynchronizer;
   private final GroupSynchronizer groupSynchronizer;
   private final UserMigration userMigration;
+  private final AccessTokenRoleReader accessTokenRoleReader;
 
   @Inject
-  public AuthenticationInfoBuilder(OAuth2RestClient restClient, UserInfoMapper userInfoMapper, SyncingRealmHelper syncingRealmHelper, GroupStore groupStore, IdTokenStore idTokenStore, AdminGroupSynchronizer adminGroupSynchronizer, GroupSynchronizer groupSynchronizer, UserMigration userMigration) {
+  public AuthenticationInfoBuilder(OAuth2RestClient restClient, UserInfoMapper userInfoMapper, SyncingRealmHelper syncingRealmHelper, GroupStore groupStore, IdTokenStore idTokenStore, AdminGroupSynchronizer adminGroupSynchronizer, GroupSynchronizer groupSynchronizer, UserMigration userMigration, AccessTokenRoleReader accessTokenRoleReader) {
     this.restClient = restClient;
     this.userInfoMapper = userInfoMapper;
     this.syncingRealmHelper = syncingRealmHelper;
@@ -45,6 +47,7 @@ public class AuthenticationInfoBuilder {
     this.adminGroupSynchronizer = adminGroupSynchronizer;
     this.groupSynchronizer = groupSynchronizer;
     this.userMigration = userMigration;
+    this.accessTokenRoleReader = accessTokenRoleReader;
   }
 
   public AuthenticationInfo create(String code, String redirectUri, String codeVerifier) {
@@ -55,7 +58,14 @@ public class AuthenticationInfoBuilder {
     syncingRealmHelper.store(user);
 
     Set<String> previousGroups = groupStore.get(user.getName());
-    Set<String> groups = userInfoMapper.createGroups(userInfo);
+    // sanitized once here, so that group entity, membership and authorization
+    // all use the same names
+    Set<String> groups = GroupNameSanitizer.sanitize(
+      ImmutableSet.<String>builder()
+        .addAll(userInfoMapper.createGroups(userInfo))
+        .addAll(accessTokenRoleReader.read(tokens.getAccessToken()))
+        .build()
+    );
     groupStore.put(user.getName(), groups);
     groupSynchronizer.sync(user.getName(), previousGroups, groups);
 
