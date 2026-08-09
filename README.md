@@ -7,6 +7,8 @@
   OAuth2/OIDC Authentication Plugin
 </h1>
 
+*[Deutsche Fassung](README_de.md)*
+
 SSO authentication for [SCM-Manager](https://scm-manager.org/) (3.x) via OAuth2 / OpenID Connect
 using the authorization code flow. Tested with [Keycloak](https://www.keycloak.org/), but works with
 any spec compliant identity provider (IdP).
@@ -443,7 +445,7 @@ A quick look at the files and directories you'll see in an SCM-Manager project.
 
 10.  **`package.json`**: Here you can find the dependency/build configuration and dependencies for the frontend.
 
-11.  **`README.md`**: This file, containing useful reference information about the project.
+11.  **`README.md`**: This file, containing useful reference information about the project. A German version is available in `README_de.md`.
 
 12.  **`scm-server.json`**: Export of the Keycloak sample client (see [Keycloak example](#keycloak-example)).
 
