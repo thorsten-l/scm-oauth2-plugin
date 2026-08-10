@@ -50,7 +50,7 @@ scmPlugin {
   displayName = "OAuth2/OIDC Authentication Plugin"
   description = "Authentication for SCM-Manager using OAuth2/OIDC"
 
-  // author = "Your name"
+  author = "Thorsten Ludewig"
   category = "Authentication"
 
   openapi {
