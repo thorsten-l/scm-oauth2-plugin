@@ -16,8 +16,6 @@
 
 package de.l9g.scm.oauth2.plugin;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Strings;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.subject.PrincipalCollection;
@@ -27,6 +25,9 @@ import org.slf4j.LoggerFactory;
 import sonia.scm.api.v2.resources.LogoutRedirection;
 import sonia.scm.config.ScmConfiguration;
 import sonia.scm.plugin.Extension;
+import sonia.scm.security.AccessToken;
+import sonia.scm.security.AccessTokenResolver;
+import sonia.scm.security.BearerToken;
 import sonia.scm.util.HttpUtil;
 
 import jakarta.inject.Inject;
@@ -45,6 +46,14 @@ import static java.util.Optional.of;
  * as {@code id_token_hint} together with a {@code post_logout_redirect_uri},
  * so the identity provider can terminate the matching SSO session without a
  * confirmation prompt and redirect the browser back to SCM-Manager.
+ *
+ * <p>Without the hint keycloak shows a "do you really want to log out" page and
+ * stays there, which is why the id token is kept in the {@link IdTokenStore} for
+ * exactly this moment.
+ *
+ * <p>Nothing in here may throw: the local logout has already happened when this
+ * hook is called, so a failure would leave the user in a half logged out state.
+ * Every problem therefore results in an empty optional, which means "no redirect".
  */
 @Extension
 public class AfterLogoutRedirectToIdp implements LogoutRedirection {
@@ -56,18 +65,22 @@ public class AfterLogoutRedirectToIdp implements LogoutRedirection {
   private final IdTokenStore idTokenStore;
   private final ScmConfiguration scmConfiguration;
   private final Provider<HttpServletRequest> requestProvider;
-  private final ObjectMapper objectMapper;
+  private final AccessTokenResolver accessTokenResolver;
 
   @Inject
-  public AfterLogoutRedirectToIdp(OAuth2Context context, EndpointResolver endpointResolver, IdTokenStore idTokenStore, ScmConfiguration scmConfiguration, Provider<HttpServletRequest> requestProvider, ObjectMapper objectMapper) {
+  public AfterLogoutRedirectToIdp(OAuth2Context context, EndpointResolver endpointResolver, IdTokenStore idTokenStore, ScmConfiguration scmConfiguration, Provider<HttpServletRequest> requestProvider, AccessTokenResolver accessTokenResolver) {
     this.context = context;
     this.endpointResolver = endpointResolver;
     this.idTokenStore = idTokenStore;
     this.scmConfiguration = scmConfiguration;
     this.requestProvider = requestProvider;
-    this.objectMapper = objectMapper;
+    this.accessTokenResolver = accessTokenResolver;
   }
 
+  /**
+   * @return url of the end session endpoint the browser should be sent to, empty if
+   *         the sso logout is switched off or no end session endpoint is available
+   */
   @Override
   public Optional<URI> afterLogoutRedirectTo() {
     OAuth2Configuration configuration = context.get();
@@ -93,6 +106,11 @@ public class AfterLogoutRedirectToIdp implements LogoutRedirection {
     }
   }
 
+  /**
+   * Builds the logout url. All three parameters are optional in the sense that a
+   * missing one only degrades the experience: without the hint the provider asks for
+   * confirmation, without the redirect uri the browser stays at the provider.
+   */
   private String createLogoutUrl(String endSessionUrl, OAuth2Configuration configuration) {
     StringBuilder url = new StringBuilder(endSessionUrl);
     char separator = endSessionUrl.contains("?") ? '&' : '?';
@@ -108,6 +126,8 @@ public class AfterLogoutRedirectToIdp implements LogoutRedirection {
       separator = '&';
     }
 
+    // the base url has to be registered at the provider as a valid post logout
+    // redirect uri, otherwise the provider refuses to return
     String baseUrl = scmConfiguration.getBaseUrl();
     if (!Strings.isNullOrEmpty(baseUrl)) {
       url.append(separator).append("post_logout_redirect_uri=").append(HttpUtil.encode(baseUrl));
@@ -116,6 +136,9 @@ public class AfterLogoutRedirectToIdp implements LogoutRedirection {
     return url.toString();
   }
 
+  /**
+   * The token is removed while it is read, it is only valid for this one logout.
+   */
   private Optional<String> currentIdToken() {
     return currentPrincipal().flatMap(idTokenStore::remove);
   }
@@ -148,7 +171,7 @@ public class AfterLogoutRedirectToIdp implements LogoutRedirection {
       }
       for (Cookie cookie : cookies) {
         if (HttpUtil.COOKIE_BEARER_AUTHENTICATION.equals(cookie.getName())) {
-          return subjectFromJwt(cookie.getValue());
+          return subjectFromAccessToken(cookie.getValue());
         }
       }
     } catch (RuntimeException ex) {
@@ -158,13 +181,20 @@ public class AfterLogoutRedirectToIdp implements LogoutRedirection {
   }
 
   /**
-   * Extracts the sub claim from the jwt payload. The signature is not
-   * verified, because the value is only used as key for the id token store.
+   * Reads the subject from the access token of this instance. The resolver of the
+   * core verifies signature and expiry, so a forged cookie cannot address the id
+   * token of another user.
    */
-  private Optional<String> subjectFromJwt(String jwt) {
-    return JwtPayload.read(jwt, objectMapper)
-      .map(payload -> payload.get("sub"))
-      .filter(sub -> !sub.isNull())
-      .map(JsonNode::asText);
+  private Optional<String> subjectFromAccessToken(String token) {
+    if (Strings.isNullOrEmpty(token)) {
+      return empty();
+    }
+    try {
+      AccessToken accessToken = accessTokenResolver.resolve(BearerToken.valueOf(token));
+      return Optional.ofNullable(accessToken).map(AccessToken::getSubject).filter(subject -> !subject.isEmpty());
+    } catch (RuntimeException ex) {
+      LOG.debug("access token cookie of the logout request could not be resolved", ex);
+      return empty();
+    }
   }
 }

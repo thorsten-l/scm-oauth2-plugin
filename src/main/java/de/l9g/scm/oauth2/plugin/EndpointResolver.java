@@ -26,6 +26,15 @@ import java.time.Clock;
  * Resolves the identity provider endpoints. If a discovery url is configured,
  * the endpoints are taken from the OIDC discovery document (cached for one hour),
  * otherwise the manually configured endpoints are used.
+ *
+ * <p>The cache is a single entry which also stores the url it was fetched for, so
+ * changing the discovery url in the administration ui invalidates it implicitly -
+ * no event listener is needed.
+ *
+ * <p>Singleton, otherwise every injection point would have its own cache. The
+ * {@code volatile} field is enough for the concurrency happening here: two
+ * parallel logins may fetch the document twice, but they cannot see a
+ * half initialized entry.
  */
 @Singleton
 public class EndpointResolver {
@@ -43,22 +52,36 @@ public class EndpointResolver {
     this(context, discoveryClient, Clock.systemUTC());
   }
 
+  /**
+   * Constructor for the tests, which need a controllable clock to verify the cache
+   * expiry.
+   */
   EndpointResolver(OAuth2Context context, DiscoveryClient discoveryClient, Clock clock) {
     this.context = context;
     this.discoveryClient = discoveryClient;
     this.clock = clock;
   }
 
+  /**
+   * Returns the endpoints to use for the current configuration.
+   *
+   * @return resolved endpoints, from the cache if it is still valid
+   * @throws org.apache.shiro.authc.AuthenticationException if a discovery url is
+   *         configured but the document cannot be fetched
+   */
   public Endpoints resolve() {
     OAuth2Configuration configuration = context.get();
 
     String discoveryUrl = configuration.getDiscoveryUrl();
     if (Strings.isNullOrEmpty(discoveryUrl)) {
+      // manual configuration: the capabilities and the issuer of the provider are
+      // unknown, the key set url has to be configured explicitly
       return new Endpoints(
         configuration.getAuthorizationUrl(),
         configuration.getTokenUrl(),
         configuration.getUserinfoUrl(),
-        configuration.getEndSessionUrl()
+        configuration.getEndSessionUrl(),
+        configuration.getJwksUrl()
       );
     }
 
@@ -72,6 +95,10 @@ public class EndpointResolver {
     return endpoints;
   }
 
+  /**
+   * Immutable cache entry. It remembers the url it belongs to, so a configuration
+   * change cannot be served from a stale cache.
+   */
   private static class CacheEntry {
     private final String discoveryUrl;
     private final long fetchedAt;

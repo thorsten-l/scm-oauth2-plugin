@@ -40,6 +40,14 @@ import java.io.IOException;
 /**
  * Forces unauthenticated browser requests to the identity provider,
  * if the configuration flag "forceLogin" is set.
+ *
+ * <p>Registered for all paths and running after the authentication filters of the
+ * core ({@code PRIORITY_POST_AUTHENTICATION}), so the subject of the request is
+ * already known here.
+ *
+ * <p>Two request types are distinguished: an xhr of the web interface gets a plain
+ * 401 (a redirect would be answered by the browser, not by the ui), everything else
+ * is redirected to the login endpoint.
  */
 @WebElement("/*")
 @Priority(Filters.PRIORITY_POST_AUTHENTICATION)
@@ -72,10 +80,18 @@ public class ForceOAuth2LoginFilter extends HttpFilter {
   }
 
   private void redirectToIdentityProvider(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    // an expired or broken cookie is removed, otherwise the browser would send it
+    // again after the login
     accessTokenCookieIssuer.invalidate(request, response);
     response.sendRedirect(createLoginRedirect(request));
   }
 
+  /**
+   * Builds the url of the login endpoint including the target of the current
+   * request, so the user ends up where they wanted to go. On {@code /login} the
+   * {@code from} parameter of the login page is used instead, otherwise everyone
+   * would land on the login page again after the login.
+   */
   private String createLoginRedirect(HttpServletRequest request) {
     String from = request.getRequestURI().substring(request.getContextPath().length());
     if ("/login".equals(from) && !Strings.isNullOrEmpty(request.getParameter("from"))) {
@@ -92,6 +108,11 @@ public class ForceOAuth2LoginFilter extends HttpFilter {
     return "XMLHttpRequest".equalsIgnoreCase(request.getHeader("X-Requested-With"));
   }
 
+  /**
+   * A request passes if the core considers it authenticated, if the forced login is
+   * switched off, if it is part of the flow itself (otherwise the redirect would
+   * loop) or if it carries a valid access token cookie.
+   */
   private boolean shouldPassThrough(HttpServletRequest request) {
     return requestPassChecker.shouldPass(request)
       || isForceLoginDisabled()
@@ -120,6 +141,10 @@ public class ForceOAuth2LoginFilter extends HttpFilter {
     return false;
   }
 
+  /**
+   * The resolver of the core verifies signature and expiry of the jwt, so only a
+   * token issued by this instance passes.
+   */
   private boolean isValidAccessToken(String token) {
     if (Strings.isNullOrEmpty(token)) {
       return false;

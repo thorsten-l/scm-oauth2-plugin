@@ -33,6 +33,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
+/**
+ * Tests the takeover of existing accounts: an external account (for example from a
+ * previous ldap authentication) is migrated silently, an account with a local
+ * password only with the explicit option, and attributes the claims do not deliver
+ * (mail, display name, properties, active flag) keep their stored value.
+ */
 @ExtendWith(MockitoExtension.class)
 class UserMigrationTest {
 

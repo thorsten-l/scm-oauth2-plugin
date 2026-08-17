@@ -47,6 +47,13 @@ final class GroupNameSanitizer {
   private GroupNameSanitizer() {
   }
 
+  /**
+   * Sanitizes a whole set of names. Two names may collapse into one (for example
+   * {@code /dev} and {@code :dev}), the set removes the duplicate.
+   *
+   * @param names names as delivered by the identity provider
+   * @return valid names, without empty entries
+   */
   static Set<String> sanitize(Set<String> names) {
     ImmutableSet.Builder<String> builder = ImmutableSet.builder();
     for (String name : names) {
@@ -58,6 +65,11 @@ final class GroupNameSanitizer {
     return builder.build();
   }
 
+  /**
+   * @param name name of the identity provider, may be {@code null}
+   * @return name with every invalid character replaced by an underscore; the
+   *         length stays the same, nothing is removed
+   */
   static String sanitize(String name) {
     if (Strings.isNullOrEmpty(name)) {
       return name;
@@ -77,6 +89,11 @@ final class GroupNameSanitizer {
     return sanitized;
   }
 
+  /**
+   * Mirrors the name validation of the core ({@code ValidationUtil.isNameValid}):
+   * some characters are forbidden everywhere, others only at the beginning or at
+   * the end of a name.
+   */
   private static boolean isForbiddenAt(char[] characters, int index) {
     char character = characters[index];
     if (FORBIDDEN.indexOf(character) >= 0) {

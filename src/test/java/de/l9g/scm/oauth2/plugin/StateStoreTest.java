@@ -26,6 +26,11 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Tests the properties the state store has to guarantee: a state can be consumed only
+ * once, an unknown or expired state yields nothing, states are unique and every
+ * authorization request gets its own pkce verifier.
+ */
 class StateStoreTest {
 
   private final StateStore stateStore = new StateStore();

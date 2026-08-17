@@ -38,6 +38,8 @@ any spec compliant identity provider (IdP).
 * **Full SSO logout** (optional): RP-initiated logout at the IdP with `id_token_hint` and
   `post_logout_redirect_uri`, so the complete SSO session ends without a confirmation prompt and
   the browser returns to the SCM login page
+* **Verified tokens**: signature and claim verification of id token and access token against the
+  JSON Web Key Set of the IdP, including a nonce per login
 * The client secret is stored **encrypted** and is never returned by the API
 
 ## Installation
@@ -104,14 +106,15 @@ plugin directory and restart.
 
 1. The user clicks "Login with &lt;provider&gt;" (or is redirected by the force login filter) —
    `GET /api/v2/oauth2/auth?from=<original url>`
-2. The plugin creates a random `state` (CSRF protection, valid once, 10 minutes) plus a PKCE
-   verifier, stores the `state` in an `HttpOnly` cookie of this browser and redirects to the
+2. The plugin creates a random `state` (CSRF protection, valid once, 10 minutes), a PKCE verifier
+   and a nonce, stores the `state` in an `HttpOnly` cookie of this browser and redirects to the
    authorization endpoint of the IdP (with `code_challenge`, if the IdP supports S256)
 3. After authentication the IdP redirects back to the callback
    `GET /api/v2/oauth2/auth/callback?code=...&state=...`
 4. The plugin checks that the `state` belongs to the state cookie of this browser, exchanges the
    authorization code for tokens at the token endpoint (server-to-server, `client_secret_post`,
-   with `code_verifier`) and fetches the user claims from the **userinfo endpoint**
+   with `code_verifier`), **verifies the id token** (signature, issuer, audience, expiry, nonce) and
+   fetches the user claims from the **userinfo endpoint**
 5. The user is created/updated/migrated, groups and permissions are synchronized, the id token is
    kept in memory for a later SSO logout and an SCM access token cookie is issued
 6. The browser is redirected to the originally requested url
@@ -145,11 +148,12 @@ Administration → Settings → OAuth2 / OIDC, or via REST (see below).
 | Full SSO logout | `ssoLogout` | `false` | RP-initiated logout at the IdP (see above) |
 | Take over local accounts | `migrateLocalUsers` | `false` | Allows the IdP to take over accounts which still have a local password, see [Migration of existing users](#migration-of-existing-users) |
 | Provider name | `providerName` | — | Display name of the IdP, shown as "Login with &lt;provider name&gt;". **Required** if the plugin is enabled |
-| OIDC Discovery URL | `discoveryUrl` | — | Issuer url or complete url of the `.well-known/openid-configuration` document. If set, all four endpoints below are resolved automatically (cached for one hour) and the manual entries are ignored |
+| OIDC Discovery URL | `discoveryUrl` | — | Issuer url or complete url of the `.well-known/openid-configuration` document. If set, all endpoints below are resolved automatically (cached for one hour) and the manual entries are ignored |
 | Authorization endpoint | `authorizationUrl` | — | Manual endpoint configuration (only used without discovery url) |
 | Token endpoint | `tokenUrl` | — | " |
 | Userinfo endpoint | `userinfoUrl` | — | " |
 | End session endpoint | `endSessionUrl` | — | ", optional; only needed for `ssoLogout` |
+| JWKS endpoint | `jwksUrl` | — | ", public keys used to verify the signatures of id token and access token. Without it (and without a discovery url) no token is verified and none is used |
 | Client ID | `clientId` | — | Client registered at the IdP |
 | Client secret | `clientSecret` | — | Secret of the (confidential) client. Stored encrypted, never returned by `GET`; send an empty value on update to keep the stored secret (the read-only flag `clientSecretSet` tells whether one is stored) |
 | Scopes | `scopes` | `openid profile email` | Space separated list of requested scopes |
@@ -312,6 +316,15 @@ The plugin implements the current recommendations for the authorization code flo
   session cannot be replayed into somebody else's browser
 * **PKCE** with S256; the verifier never leaves the server. It is omitted only if the discovery
   document explicitly advertises no support for it
+* the **id token is verified cryptographically**: signature against the JSON Web Key Set of the IdP
+  (RS/PS/ES family) or against the client secret (HS family), plus `iss`, `aud`/`azp`, expiry and
+  the `nonce` of this very login. `alg: none` and unknown algorithms are rejected, and the algorithm
+  determines which kind of key is accepted (no algorithm confusion). An id token which is present
+  but invalid aborts the login
+* a fresh **nonce** is sent with every authorization request, so an id token of another session
+  cannot be replayed
+* **roles are only imported from a verified access token**; an opaque token, an invalid signature or
+  a missing key set means no roles instead of unverified ones
 * the client secret is stored encrypted and is write-only in the API
 * only absolute `http`/`https` urls are accepted as endpoints
 * the forced login only lets requests pass whose access token cookie can actually be validated
@@ -327,6 +340,15 @@ Two points to keep in mind when operating the plugin:
 * **The permission `configuration:write:oauth2` has to be treated like global admin**: whoever may
   change the configuration can point the endpoints at a different host and thereby both receive the
   client secret and take over the authentication completely.
+
+* **A key source is required for the token verification.** With a discovery url it is taken from the
+  document (`jwks_uri`) automatically. If the endpoints are configured manually, configure `jwksUrl`
+  as well — otherwise the plugin logs a warning, discards the id token (the SSO logout then works
+  without `id_token_hint`) and imports no roles from the access token. Note the difference: a missing
+  key set url only costs the id token, whereas a configured key set which cannot be fetched or does
+  not contain the key of the token makes the login fail — an id token that is present has to be
+  verifiable (fail closed). The key set is cached for one hour and re-fetched when a token names an
+  unknown key, so a key rotation at the IdP needs no action.
 
 Run the instance behind TLS — the client secret is transmitted in the body when the configuration
 is saved, and the session cookie is only marked `Secure` on an HTTPS connection.
@@ -380,6 +402,22 @@ The plugin can be compiled and packaged with the following tasks:
 * check - `gradle check` - executes all registered checks and tests (java and ui)
 * fix - `gradle fix` - fixes all fixable findings of the check task
 * smp - `gradle smp` - Builds the smp file, without the execution of checks and tests
+* javadoc - `gradle javadoc` - generates the api documentation below `build/docs/javadoc`
+
+Gradle has no profiles like maven; the build evaluates the project property `stage` instead.
+With `-Pstage=release` the api documentation is written to [docs/javadoc](docs/javadoc) next to
+the sources instead of into the build directory, so it is committed together with the release:
+
+```bash
+# regenerate only the documentation
+./gradlew javadoc -Pstage=release
+
+# complete release build including the committed documentation
+./gradlew build -Pstage=release
+```
+
+The directory is emptied before it is regenerated, so pages of removed classes do not stay behind.
+Without the property everything stays in the build directory and `docs/javadoc` is untouched.
 
 For the development and testing the `run` task of the plugin can be used:
 
@@ -454,6 +492,22 @@ A quick look at the files and directories you'll see in an SCM-Manager project.
 14. **`tsconfig.json`** This is the typescript configuration file.
 
 15. **`yarn.lock`**: This is the ui dependency configuration.
+
+## Further documentation
+
+Below `docs/` you will find the generated api documentation as well as four documents (in German)
+which describe the plugin from a data protection and information security point of view:
+
+| Document | Content |
+|---|---|
+| [PROZESS_BESCHREIBUNG.md](docs/PROZESS_BESCHREIBUNG.md) | Processing operations, data categories, storage locations, retention and recipients — basis for a record of processing activities (art. 30 GDPR) |
+| [COMPLIANCE_BERICHT.md](docs/COMPLIANCE_BERICHT.md) | Assessment against GDPR and the NIS2 risk management measures (art. 21(2)), including implemented measures, findings and residual risks |
+| [DATENSCHUTZ_FOLGEABSCHAETZUNG.md](docs/DATENSCHUTZ_FOLGEABSCHAETZUNG.md) | Threshold analysis and data protection impact assessment (art. 35 GDPR) |
+| [SOURCECODE_STATISTIK.md](docs/SOURCECODE_STATISTIK.md) | Size, test coverage, documentation ratio and dependencies |
+| [docs/javadoc](docs/javadoc) | Api documentation, regenerated with `./gradlew javadoc -Pstage=release` |
+
+The documents describe the software; the organisational parts (legal basis, retention periods,
+responsibilities) have to be completed by the operator of the instance.
 
 ## Need help?
 

@@ -26,6 +26,12 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Tests the mapping of group names. Besides the single replacements the important
+ * test is {@code shouldAlwaysProduceNamesAcceptedByScm}: it feeds a list of critical
+ * names through the sanitizer and checks the result against the name validation of
+ * the core, so the sanitizer cannot drift away from it.
+ */
 class GroupNameSanitizerTest {
 
   @ParameterizedTest

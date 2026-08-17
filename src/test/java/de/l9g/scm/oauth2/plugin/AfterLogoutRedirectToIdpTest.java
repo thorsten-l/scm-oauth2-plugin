@@ -16,27 +16,34 @@
 
 package de.l9g.scm.oauth2.plugin;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import sonia.scm.config.ScmConfiguration;
+import sonia.scm.security.AccessToken;
+import sonia.scm.security.AccessTokenResolver;
+import sonia.scm.security.BearerToken;
 import sonia.scm.util.HttpUtil;
 
 import jakarta.inject.Provider;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
+/**
+ * Tests the logout redirect: no redirect while the sso logout is switched off or no
+ * end session endpoint exists, and a complete url with client id, post logout
+ * redirect uri and - if the principal can be determined from the access token
+ * cookie - the id token hint.
+ */
 @ExtendWith(MockitoExtension.class)
 class AfterLogoutRedirectToIdpTest {
 
@@ -54,6 +61,12 @@ class AfterLogoutRedirectToIdpTest {
   @Mock
   private HttpServletRequest request;
 
+  @Mock
+  private AccessTokenResolver accessTokenResolver;
+
+  @Mock
+  private AccessToken accessToken;
+
   private final IdTokenStore idTokenStore = new IdTokenStore();
   private final ScmConfiguration scmConfiguration = new ScmConfiguration();
   private final OAuth2Configuration configuration = new OAuth2Configuration();
@@ -63,7 +76,7 @@ class AfterLogoutRedirectToIdpTest {
   @BeforeEach
   void setUpLogoutRedirection() {
     logoutRedirection = new AfterLogoutRedirectToIdp(
-      context, endpointResolver, idTokenStore, scmConfiguration, requestProvider, new ObjectMapper()
+      context, endpointResolver, idTokenStore, scmConfiguration, requestProvider, accessTokenResolver
     );
     lenient().when(context.get()).thenReturn(configuration);
     lenient().when(endpointResolver.resolve()).thenReturn(new Endpoints("a", "t", "u", END_SESSION_URL));
@@ -106,12 +119,12 @@ class AfterLogoutRedirectToIdpTest {
   void shouldRedirectWithIdTokenHintFromAccessTokenCookie() {
     idTokenStore.put("trillian", "the-id-token");
 
-    String payload = Base64.getUrlEncoder().withoutPadding()
-      .encodeToString("{\"sub\":\"trillian\"}".getBytes(StandardCharsets.UTF_8));
-    Cookie cookie = new Cookie(HttpUtil.COOKIE_BEARER_AUTHENTICATION, "header." + payload + ".signature");
-
+    Cookie cookie = new Cookie(HttpUtil.COOKIE_BEARER_AUTHENTICATION, "the-access-token");
     when(requestProvider.get()).thenReturn(request);
     when(request.getCookies()).thenReturn(new Cookie[]{cookie});
+    // the resolver of the core verifies signature and expiry of the cookie
+    when(accessTokenResolver.resolve(any(BearerToken.class))).thenReturn(accessToken);
+    when(accessToken.getSubject()).thenReturn("trillian");
 
     Optional<URI> uri = logoutRedirection.afterLogoutRedirectTo();
 

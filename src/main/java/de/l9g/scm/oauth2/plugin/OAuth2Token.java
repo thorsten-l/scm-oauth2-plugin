@@ -25,24 +25,37 @@ import static com.google.common.base.Preconditions.checkArgument;
  * Shiro authentication token which carries the authorization code received
  * from the identity provider and the redirect uri which was used to obtain it.
  * The redirect uri is required again for the code exchange at the token endpoint.
+ *
+ * <p>Created by the callback of the {@link OAuth2AuthenticationResource} and passed
+ * to {@code subject.login}, from where shiro routes it to the
+ * {@link OAuth2Realm}.
  */
 public final class OAuth2Token implements AuthenticationToken {
 
   private final String code;
   private final String redirectUri;
   private final String codeVerifier;
+  private final String nonce;
 
-  private OAuth2Token(String code, String redirectUri, String codeVerifier) {
+  private OAuth2Token(String code, String redirectUri, String codeVerifier, String nonce) {
     this.code = code;
     this.redirectUri = redirectUri;
     this.codeVerifier = codeVerifier;
+    this.nonce = nonce;
   }
 
+  /**
+   * @return the authorization code, the only credential of this flow
+   */
   @Override
   public String getCredentials() {
     return code;
   }
 
+  /**
+   * @return callback url of the authorization request, it has to be sent again
+   *         when the code is redeemed
+   */
   public String getRedirectUri() {
     return redirectUri;
   }
@@ -55,18 +68,47 @@ public final class OAuth2Token implements AuthenticationToken {
     return codeVerifier;
   }
 
+  /**
+   * The nonce of the authorization request, the id token has to carry the same value.
+   * May be {@code null} for a request which was created without one.
+   */
+  public String getNonce() {
+    return nonce;
+  }
+
+  /**
+   * The principal is only known after the code has been exchanged and the claims
+   * have been read, so this token cannot provide one.
+   *
+   * @return never returns
+   * @throws UnsupportedOperationException always
+   */
   @Override
   public Object getPrincipal() {
     throw new UnsupportedOperationException("OAuth2Token has no principal, it provides only credentials");
   }
 
+  /**
+   * Factory for a flow without pkce and without nonce.
+   */
   public static OAuth2Token valueOf(String code, String redirectUri) {
-    return valueOf(code, redirectUri, null);
+    return valueOf(code, redirectUri, null, null);
   }
 
-  public static OAuth2Token valueOf(String code, String redirectUri, String codeVerifier) {
+  /**
+   * Factory with validation of the mandatory values, so a broken token cannot
+   * reach the realm.
+   *
+   * @param code         authorization code, mandatory
+   * @param redirectUri  callback url of the authorization request, mandatory
+   * @param codeVerifier pkce verifier, optional
+   * @param nonce        nonce of the authorization request, optional
+   * @return the token for {@code subject.login}
+   * @throws IllegalArgumentException if code or redirect uri are missing
+   */
+  public static OAuth2Token valueOf(String code, String redirectUri, String codeVerifier, String nonce) {
     checkArgument(!Strings.isNullOrEmpty(code), "code is null or empty");
     checkArgument(!Strings.isNullOrEmpty(redirectUri), "redirectUri is null or empty");
-    return new OAuth2Token(code, redirectUri, codeVerifier);
+    return new OAuth2Token(code, redirectUri, codeVerifier, nonce);
   }
 }

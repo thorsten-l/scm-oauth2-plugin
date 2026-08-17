@@ -39,6 +39,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Tests the synchronization of groups and memberships: creating missing groups,
+ * adding and removing members, keeping empty groups and skipping external ones.
+ * The second half is about robustness - a failure of a single group, an invalid name
+ * or a failing administration context must never fail the login.
+ */
 @ExtendWith(MockitoExtension.class)
 class GroupSynchronizerTest {
 

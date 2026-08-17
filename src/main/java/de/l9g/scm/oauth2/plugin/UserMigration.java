@@ -58,10 +58,20 @@ public class UserMigration {
     this.administrationContext = administrationContext;
   }
 
+  /**
+   * Merges the user built from the claims with a possibly existing account.
+   *
+   * @param fromClaim user as delivered by the {@link UserInfoMapper}
+   * @return the user to persist: either the unchanged new user or the existing
+   *         account updated with the values of the claims
+   * @throws AuthenticationException if an account with a local password exists and
+   *         the takeover of local accounts is not enabled
+   */
   public User prepare(User fromClaim) {
     User existing = findExisting(fromClaim.getName());
 
     if (existing == null) {
+      // first login of this user, nothing to migrate
       return withDisplayNameFallback(fromClaim, fromClaim.getName());
     }
 
@@ -97,6 +107,11 @@ public class UserMigration {
     return !user.isExternal() && !Strings.isNullOrEmpty(user.getPassword());
   }
 
+  /**
+   * The existing account is the base, so everything which is not part of the claims
+   * survives. It is cloned, because the instance of the user manager must not be
+   * modified in place.
+   */
   private User merge(User fromClaim, User existing) {
     User user = existing.clone();
 
@@ -123,6 +138,10 @@ public class UserMigration {
     return withDisplayNameFallback(user, existing.getName());
   }
 
+  /**
+   * SCM-Manager requires a display name, so the user name is used if neither the
+   * claims nor the stored account provide one.
+   */
   private User withDisplayNameFallback(User user, String name) {
     if (Strings.isNullOrEmpty(user.getDisplayName())) {
       user.setDisplayName(name);

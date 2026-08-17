@@ -30,6 +30,18 @@ import jakarta.xml.bind.annotation.XmlElement;
 import jakarta.xml.bind.annotation.XmlRootElement;
 import java.util.Set;
 
+/**
+ * Stores the group names of the last login per user. It is the source of the
+ * {@link OAuth2GroupResolver} and therefore the basis of every authorization by
+ * group.
+ *
+ * <p>The store is needed because the claims are only available during the login,
+ * while authorization happens on every request. It is persisted by the core below
+ * {@code var/data/oauth2Groups} (one xml file per user), so a restart does not
+ * cost anyone their permissions.
+ *
+ * <p>The names in here are already sanitized, see {@link GroupNameSanitizer}.
+ */
 @Singleton
 public class GroupStore {
 
@@ -41,15 +53,29 @@ public class GroupStore {
     this.store = factory.withType(Groups.class).withName(STORE_NAME).build();
   }
 
+  /**
+   * @param principal user id
+   * @return groups of the last login, empty if the user never logged in via oauth2
+   */
   public Set<String> get(String principal) {
     Groups groups = store.get(principal);
     return groups != null ? groups.groups : ImmutableSet.of();
   }
 
+  /**
+   * Replaces the groups of a user; the previous entry is not merged.
+   *
+   * @param principal user id
+   * @param groups    sanitized group names of the current login
+   */
   public void put(String principal, Set<String> groups) {
     store.put(principal, new Groups(groups));
   }
 
+  /**
+   * Jaxb wrapper, the data store needs a class it can marshal - a bare
+   * {@code Set} would not work.
+   */
   @AllArgsConstructor
   @NoArgsConstructor
   @XmlRootElement

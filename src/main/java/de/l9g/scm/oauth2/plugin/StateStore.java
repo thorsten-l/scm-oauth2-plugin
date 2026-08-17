@@ -35,6 +35,14 @@ import java.util.stream.Collectors;
  * Holds the pending authorization requests. The state protects the callback
  * endpoint against csrf and is additionally bound to the browser which started
  * the flow, see {@link StateCookie}. Each state can be consumed only once.
+ *
+ * <p>The store is in memory only and therefore neither survives a restart nor is
+ * shared in a cluster: a login which is in flight during a restart or which is
+ * answered by another node has to be repeated. Persisting it would buy little,
+ * since the states live for ten minutes at most.
+ *
+ * <p>Housekeeping happens on write ({@link #create(String)}): expired entries are
+ * dropped and the size limit is enforced. This way no background task is needed.
  */
 @Singleton
 public class StateStore {
@@ -62,19 +70,43 @@ public class StateStore {
     this.clock = clock;
   }
 
+  /**
+   * Creates a new authorization request with a random state, a fresh pkce verifier
+   * and a fresh nonce and remembers it.
+   *
+   * @param redirectUrl already sanitized path the user should reach after the login
+   * @return the created request, its state has to be sent to the identity provider
+   *         and to the browser as a cookie
+   */
   public AuthorizationRequest create(String redirectUrl) {
     removeExpiredStates();
     enforceSizeLimit();
 
-    byte[] bytes = new byte[STATE_LENGTH_IN_BYTES];
-    random.nextBytes(bytes);
-    String state = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-
-    AuthorizationRequest request = new AuthorizationRequest(state, Pkce.createVerifier(), redirectUrl);
+    String state = randomValue();
+    AuthorizationRequest request = new AuthorizationRequest(
+      state, Pkce.createVerifier(), randomValue(), redirectUrl
+    );
     states.put(state, new Entry(request, clock.millis()));
     return request;
   }
 
+  /**
+   * State and nonce are only compared with themselves, so any value which cannot be
+   * guessed will do.
+   */
+  private String randomValue() {
+    byte[] bytes = new byte[STATE_LENGTH_IN_BYTES];
+    random.nextBytes(bytes);
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+  }
+
+  /**
+   * Removes the request belonging to the state and returns it. A second call with
+   * the same state is always empty, so a callback url cannot be replayed.
+   *
+   * @param state state of the callback, may be {@code null}
+   * @return the pending request, empty if the state is unknown or expired
+   */
   public Optional<AuthorizationRequest> consume(String state) {
     if (state == null) {
       return Optional.empty();
@@ -86,6 +118,9 @@ public class StateStore {
     return Optional.of(entry.request);
   }
 
+  /**
+   * Number of pending requests, only used by the tests.
+   */
   int size() {
     return states.size();
   }
@@ -94,7 +129,13 @@ public class StateStore {
     states.entrySet().removeIf(entry -> isExpired(entry.getValue()));
   }
 
+  /**
+   * Drops the oldest requests until there is room for one more. Only reached if
+   * requests are created faster than they expire, which in practice means someone
+   * is calling the login endpoint in a loop.
+   */
   private void enforceSizeLimit() {
+    // -1, because room for the request which is about to be created is needed
     int excess = states.size() - (MAX_PENDING_REQUESTS - 1);
     if (excess <= 0) {
       return;

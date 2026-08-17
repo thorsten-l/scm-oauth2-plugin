@@ -27,24 +27,39 @@ import java.util.Optional;
  * started it. Without this binding an attacker could obtain a valid
  * state/code pair and make a victim call the callback with it, which would
  * silently log the victim in as the attacker (login csrf, see rfc 9700 4.7).
+ *
+ * <p>The methods return a ready made {@code Set-Cookie} header value instead of a
+ * {@code Cookie} object, because the servlet cookie api of this version cannot
+ * express {@code SameSite}.
  */
 final class StateCookie {
 
   static final String NAME = "X-SCM-OAuth2-State";
 
+  /** Same lifetime as the state in the {@link StateStore}. */
   private static final int MAX_AGE_IN_SECONDS = 600;
 
   private StateCookie() {
   }
 
+  /**
+   * @return header value which stores the state in the browser
+   */
   static String create(HttpServletRequest request, String state) {
     return header(request, state, MAX_AGE_IN_SECONDS);
   }
 
+  /**
+   * @return header value which deletes the cookie, sent with the answer of the
+   *         callback so a used state does not stay in the browser
+   */
   static String invalidate(HttpServletRequest request) {
     return header(request, "", 0);
   }
 
+  /**
+   * @return state stored in the browser, empty if there is no such cookie
+   */
   static Optional<String> read(HttpServletRequest request) {
     Cookie[] cookies = request.getCookies();
     if (cookies == null) {
@@ -69,6 +84,8 @@ final class StateCookie {
       // requests, but lax is sufficient for a top level GET
       .append("; SameSite=Lax");
 
+    // only over https, otherwise the cookie would be dropped by the browser on a
+    // plain http development instance
     if (request.isSecure()) {
       cookie.append("; Secure");
     }
@@ -76,6 +93,10 @@ final class StateCookie {
     return cookie.toString();
   }
 
+  /**
+   * The cookie is scoped to the context path of SCM-Manager, so it is not sent to
+   * other applications on the same host.
+   */
   private static String path(HttpServletRequest request) {
     String contextPath = request.getContextPath();
     return Strings.isNullOrEmpty(contextPath) ? "/" : contextPath;

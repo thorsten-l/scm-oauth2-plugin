@@ -22,6 +22,15 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Transport format of the configuration. Mirrors
+ * {@code OAuth2Configuration} field by field, with two additions: the hal links
+ * ({@code self} and, if permitted, {@code update}) added by the
+ * {@link ConfigurationMapper}, and the read only flag {@link #clientSecretSet}.
+ *
+ * <p>New configuration fields have to be added here as well, otherwise they never
+ * reach the ui - the mapper maps by name.
+ */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -35,6 +44,7 @@ public class ConfigurationDto extends HalRepresentation {
   private String tokenUrl;
   private String userinfoUrl;
   private String endSessionUrl;
+  private String jwksUrl;
 
   private String clientId;
 
@@ -65,6 +75,10 @@ public class ConfigurationDto extends HalRepresentation {
 
   private boolean enabled;
 
+  /**
+   * Only overridden to widen the visibility, so the mapper of this package can add
+   * the links.
+   */
   @Override
   @SuppressWarnings("squid:S1185") // We want to have this method available in this package
   protected HalRepresentation add(Links links) {

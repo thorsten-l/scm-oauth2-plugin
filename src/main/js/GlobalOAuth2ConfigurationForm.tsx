@@ -19,6 +19,12 @@ import { WithTranslation, withTranslation } from "react-i18next";
 import { Links } from "@scm-manager/ui-types";
 import { Checkbox, InputField, Subtitle } from "@scm-manager/ui-components";
 
+/**
+ * Shape of the configuration as delivered by the REST api, it matches
+ * ConfigurationDto of the backend one to one. A new field has to be added here, in
+ * the dto and in the entity, and it needs a label and a help text in
+ * src/main/resources/locales/{en,de}/plugins.json.
+ */
 type GlobalConfiguration = {
   providerName: string;
   discoveryUrl: string;
@@ -26,6 +32,7 @@ type GlobalConfiguration = {
   tokenUrl: string;
   userinfoUrl: string;
   endSessionUrl: string;
+  jwksUrl: string;
   clientId: string;
   clientSecret: string;
   clientSecretSet: boolean;
@@ -45,7 +52,12 @@ type GlobalConfiguration = {
 };
 
 type Props = WithTranslation & {
+  /** Configuration loaded by the "Configuration" component of the core. */
   initialConfiguration: GlobalConfiguration;
+  /**
+   * Has to be called on every change with the complete configuration and a validity
+   * flag; the core enables its save button based on that flag.
+   */
   onConfigurationChange: (p1: GlobalConfiguration, p2: boolean) => void;
 };
 
@@ -53,6 +65,17 @@ type State = GlobalConfiguration & {
   configurationChanged?: boolean;
 };
 
+/**
+ * The configuration form. A class component, because that is the shape the
+ * "Configuration" component of the core expects.
+ *
+ * Conventions inside the form:
+ * - every field is disabled while the plugin is not enabled
+ * - the endpoint fields are additionally disabled as soon as a discovery url is
+ *   entered, because they are then resolved from the discovery document
+ * - the client secret is a password field; it is never delivered by the api, the
+ *   placeholder only states whether one is stored
+ */
 class GlobalOAuth2ConfigurationForm extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -151,6 +174,15 @@ class GlobalOAuth2ConfigurationForm extends React.Component<Props, State> {
             helpText={t("scm-oauth2-plugin.form.endSessionUrlHelp")}
             disabled={!this.state.enabled || !!this.state.discoveryUrl}
             value={this.state.endSessionUrl}
+            onChange={this.valueChangeHandler}
+            type="url"
+          />
+          <InputField
+            name="jwksUrl"
+            label={t("scm-oauth2-plugin.form.jwksUrl")}
+            helpText={t("scm-oauth2-plugin.form.jwksUrlHelp")}
+            disabled={!this.state.enabled || !!this.state.discoveryUrl}
+            value={this.state.jwksUrl}
             onChange={this.valueChangeHandler}
             type="url"
           />
@@ -271,6 +303,10 @@ class GlobalOAuth2ConfigurationForm extends React.Component<Props, State> {
     return null;
   };
 
+  /**
+   * Single change handler for all fields: the name of the input is the key in the
+   * state, and the parent is notified after the state has been applied.
+   */
   valueChangeHandler = (value: string | boolean, name?: string) => {
     this.setState(
       {
@@ -286,6 +322,10 @@ class GlobalOAuth2ConfigurationForm extends React.Component<Props, State> {
     );
   };
 
+  /**
+   * Same rule as in the backend: a provider name is required as soon as the plugin
+   * is enabled, everything else is validated by the identity provider at runtime.
+   */
   isValid = () => {
     return !this.state.enabled || !!this.state.providerName;
   };

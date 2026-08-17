@@ -37,6 +37,15 @@ import jakarta.inject.Provider;
 import static java.util.Collections.singletonMap;
 import static sonia.scm.web.VndMediaType.INDEX;
 
+/**
+ * Adds the links of the plugin to the index resource ({@code /api/v2/}). This is
+ * the only channel through which the react frontend learns about the plugin: it
+ * renders a login button if {@code oauth2Login} is present and shows the navigation
+ * entry of the configuration if {@code oauth2Config} is present.
+ *
+ * <p>Because the links are permission and state dependent, the ui does not need any
+ * logic of its own - what must not be visible simply has no link.
+ */
 @Extension
 public class IndexConfigurationEnricher extends JsonEnricherBase {
 
@@ -50,11 +59,16 @@ public class IndexConfigurationEnricher extends JsonEnricherBase {
     this.oauth2Context = oauth2Context;
   }
 
+  /**
+   * @param context response of the resource which is currently being enriched,
+   *                every json response passes by here
+   */
   @Override
   public void enrich(JsonEnricherContext context) {
     if (resultHasMediaType(INDEX, context)) {
       JsonNode links = context.getResponseEntity().get("_links");
 
+      // link to the configuration only for administrators
       if (ConfigurationPermissions.read().isPermitted(Constants.NAME)) {
         String configUrl = new LinkBuilder(scmPathInfoStore.get().get(), ConfigurationResource.class)
           .method("get")
@@ -66,6 +80,8 @@ public class IndexConfigurationEnricher extends JsonEnricherBase {
         addPropertyNode(links, "oauth2Config", configRefNode);
       }
 
+      // the login link is offered as long as nobody is logged in through an
+      // external authentication yet; the name is used as the label of the button
       if (isOAuth2AuthenticationEnabled() && !isExternalUserAuthenticated()) {
         String loginUrl = new LinkBuilder(scmPathInfoStore.get().get(), OAuth2AuthenticationResource.class)
           .method("login")
@@ -87,11 +103,19 @@ public class IndexConfigurationEnricher extends JsonEnricherBase {
     return oauth2Context.get().isEnabled();
   }
 
+  /**
+   * The provider name is mandatory in the configuration, but an instance which was
+   * configured before that rule existed may still be missing it.
+   */
   private String getProviderName() {
     String providerName = oauth2Context.get().getProviderName();
     return Strings.isNullOrEmpty(providerName) ? "OAuth2" : providerName;
   }
 
+  /**
+   * Someone who is already logged in externally does not need a login button; a
+   * locally authenticated user may still switch to the identity provider.
+   */
   private boolean isExternalUserAuthenticated() {
     Subject subject = SecurityUtils.getSubject();
     if (subject.isAuthenticated()) {

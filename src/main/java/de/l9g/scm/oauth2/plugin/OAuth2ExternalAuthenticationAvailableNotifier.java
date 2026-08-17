@@ -20,6 +20,11 @@ import jakarta.inject.Inject;
 import sonia.scm.plugin.Extension;
 import sonia.scm.user.ExternalAuthenticationAvailableNotifier;
 
+/**
+ * Tells the core that an external authentication is available. The core uses this
+ * to adapt its user administration: creating a user without a password is only
+ * offered if some plugin answers {@code true} here.
+ */
 @Extension
 public class OAuth2ExternalAuthenticationAvailableNotifier implements ExternalAuthenticationAvailableNotifier {
 

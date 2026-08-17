@@ -39,6 +39,8 @@ funktioniert aber mit jedem spezifikationskonformen Identity Provider (IdP).
 * **Vollständiger SSO-Logout** (optional): RP-initiated Logout beim IdP mit `id_token_hint` und
   `post_logout_redirect_uri`, sodass die komplette SSO-Sitzung ohne Rückfrage endet und der Browser
   zur SCM-Anmeldeseite zurückkehrt
+* **Geprüfte Tokens**: Signatur- und Claim-Prüfung von ID Token und Access Token gegen den JSON Web
+  Key Set des IdP, inklusive Nonce je Anmeldung
 * Das Client Secret wird **verschlüsselt** gespeichert und von der API nie zurückgegeben
 
 ## Installation
@@ -105,14 +107,16 @@ Plugin-Verzeichnis löschen und neu starten.
 
 1. Der Benutzer klickt auf „Anmelden mit &lt;Provider&gt;" (oder wird vom Force-Login-Filter
    weitergeleitet) — `GET /api/v2/oauth2/auth?from=<ursprüngliche URL>`
-2. Das Plugin erzeugt einen zufälligen `state` (CSRF-Schutz, einmalig gültig, 10 Minuten) sowie
-   einen PKCE-Verifier, legt den `state` in einem `HttpOnly`-Cookie dieses Browsers ab und leitet
-   zum Authorization Endpoint des IdP weiter (mit `code_challenge`, sofern der IdP S256 unterstützt)
+2. Das Plugin erzeugt einen zufälligen `state` (CSRF-Schutz, einmalig gültig, 10 Minuten), einen
+   PKCE-Verifier und einen Nonce, legt den `state` in einem `HttpOnly`-Cookie dieses Browsers ab und
+   leitet zum Authorization Endpoint des IdP weiter (mit `code_challenge`, sofern der IdP S256
+   unterstützt)
 3. Nach der Authentifizierung leitet der IdP zurück zum Callback
    `GET /api/v2/oauth2/auth/callback?code=...&state=...`
 4. Das Plugin prüft, ob der `state` zum State-Cookie dieses Browsers gehört, tauscht den
    Authorization Code am Token Endpoint gegen Tokens (Server-zu-Server, `client_secret_post`, mit
-   `code_verifier`) und holt die Benutzer-Claims vom **Userinfo Endpoint**
+   `code_verifier`), **prüft das ID Token** (Signatur, Aussteller, Audience, Laufzeit, Nonce) und
+   holt die Benutzer-Claims vom **Userinfo Endpoint**
 5. Der Benutzer wird angelegt/aktualisiert/migriert, Gruppen und Berechtigungen werden
    synchronisiert, das ID-Token wird für einen späteren SSO-Logout im Speicher gehalten und ein
    SCM-Access-Token-Cookie wird ausgestellt
@@ -153,6 +157,7 @@ Administration → Einstellungen → OAuth2 / OIDC, oder per REST (siehe unten).
 | Token Endpoint | `tokenUrl` | — | " |
 | Userinfo Endpoint | `userinfoUrl` | — | " |
 | End Session Endpoint | `endSessionUrl` | — | ", optional; nur für `ssoLogout` nötig |
+| JWKS Endpoint | `jwksUrl` | — | ", öffentliche Schlüssel zur Prüfung der Signaturen von ID Token und Access Token. Ohne ihn (und ohne Discovery URL) wird kein Token geprüft und keines verwendet |
 | Client ID | `clientId` | — | Der beim IdP registrierte Client |
 | Client Secret | `clientSecret` | — | Secret des (vertraulichen) Clients. Verschlüsselt gespeichert, wird von `GET` nie zurückgegeben; beim Aktualisieren einen leeren Wert senden, um das gespeicherte Secret beizubehalten (das schreibgeschützte Feld `clientSecretSet` zeigt an, ob eines hinterlegt ist) |
 | Scopes | `scopes` | `openid profile email` | Durch Leerzeichen getrennte Liste der angeforderten Scopes |
@@ -314,6 +319,15 @@ Das Plugin setzt die aktuellen Empfehlungen für den Authorization Code Flow um
   fremden Sitzung kann so nicht in den Browser eines anderen eingespielt werden
 * **PKCE** mit S256; der Verifier verlässt den Server nie. Er entfällt nur, wenn das
   Discovery-Dokument ausdrücklich keine Unterstützung dafür angibt
+* Das **ID Token wird kryptografisch geprüft**: Signatur gegen den JSON Web Key Set des IdP
+  (RS-/PS-/ES-Familie) bzw. gegen das Client Secret (HS-Familie), dazu `iss`, `aud`/`azp`, Laufzeit
+  und der `nonce` genau dieser Anmeldung. `alg: none` und unbekannte Verfahren werden abgewiesen, und
+  der Algorithmus bestimmt den zulässigen Schlüsseltyp (kein Algorithm Confusion). Ein vorhandenes,
+  aber ungültiges ID Token bricht die Anmeldung ab
+* Mit jeder Autorisierungsanfrage wird ein frischer **Nonce** gesendet, sodass ein ID Token einer
+  anderen Sitzung nicht wiederverwendet werden kann
+* **Rollen werden nur aus einem geprüften Access Token importiert**; ein opakes Token, eine ungültige
+  Signatur oder ein fehlender Schlüsselsatz bedeuten keine Rollen statt ungeprüfter Rollen
 * Das Client Secret wird verschlüsselt gespeichert und ist in der API write-only
 * Als Endpunkte werden nur absolute `http`/`https`-URLs akzeptiert
 * Der erzwungene Login lässt nur Anfragen passieren, deren Access-Token-Cookie tatsächlich
@@ -329,6 +343,16 @@ Zwei Punkte, die im Betrieb zu beachten sind:
 * **Die Berechtigung `configuration:write:oauth2` ist wie globaler Admin zu behandeln**: Wer die
   Konfiguration ändern darf, kann die Endpunkte auf einen anderen Host umbiegen und damit sowohl
   das Client Secret erhalten als auch die Authentifizierung vollständig übernehmen.
+
+* **Für die Tokenprüfung ist eine Schlüsselquelle nötig.** Mit einer Discovery URL wird sie
+  automatisch aus dem Dokument übernommen (`jwks_uri`). Bei manuell konfigurierten Endpunkten muss
+  zusätzlich `jwksUrl` gesetzt werden — sonst protokolliert das Plugin eine Warnung, verwirft das ID
+  Token (der SSO-Logout läuft dann ohne `id_token_hint`) und importiert keine Rollen aus dem Access
+  Token. Wichtiger Unterschied: Eine fehlende Schlüsselquelle kostet nur das ID Token, ein
+  konfigurierter Schlüsselsatz, der nicht erreichbar ist oder den Schlüssel des Tokens nicht enthält,
+  lässt die Anmeldung dagegen scheitern — ein vorhandenes ID Token muss überprüfbar sein (fail
+  closed). Der Schlüsselsatz wird eine Stunde gecacht und bei einem unbekannten Schlüssel neu
+  geholt, eine Schlüsselrotation im IdP erfordert also kein Eingreifen.
 
 Die Instanz sollte hinter TLS betrieben werden — beim Speichern der Konfiguration wird das Client
 Secret im Body übertragen, und das Session-Cookie wird nur über eine HTTPS-Verbindung als `Secure`
@@ -386,6 +410,23 @@ Das Plugin lässt sich mit den folgenden Tasks kompilieren und paketieren:
 * check - `gradle check` - führt alle registrierten Checks und Tests aus (Java und UI)
 * fix - `gradle fix` - behebt alle automatisch behebbaren Befunde des check-Tasks
 * smp - `gradle smp` - baut die smp-Datei ohne Checks und Tests
+* javadoc - `gradle javadoc` - erzeugt die API-Dokumentation unter `build/docs/javadoc`
+
+Gradle kennt keine Profile wie Maven; stattdessen wertet der Build die Projekt-Property `stage`
+aus. Mit `-Pstage=release` wird die API-Dokumentation nach [docs/javadoc](docs/javadoc) neben die
+Quellen geschrieben statt in das Build-Verzeichnis, damit sie mit dem Release eingecheckt wird:
+
+```bash
+# nur die Dokumentation neu erzeugen
+./gradlew javadoc -Pstage=release
+
+# vollständiger Release-Build inklusive eingecheckter Dokumentation
+./gradlew build -Pstage=release
+```
+
+Das Verzeichnis wird vor dem Neuerzeugen geleert, damit keine Seiten entfernter Klassen
+zurückbleiben. Ohne die Property bleibt alles im Build-Verzeichnis und `docs/javadoc` wird nicht
+angefasst.
 
 Für Entwicklung und Test kann der `run`-Task genutzt werden:
 
@@ -462,6 +503,22 @@ Ein kurzer Blick auf die Dateien und Verzeichnisse eines SCM-Manager-Projekts.
 14. **`tsconfig.json`** Die TypeScript-Konfigurationsdatei.
 
 15. **`yarn.lock`**: Die Konfiguration der UI-Abhängigkeiten.
+
+## Weitere Dokumentation
+
+Unter `docs/` liegen neben der generierten API-Dokumentation vier Dokumente, die das Plugin aus
+Sicht von Datenschutz und Informationssicherheit beschreiben:
+
+| Dokument | Inhalt |
+|---|---|
+| [PROZESS_BESCHREIBUNG.md](docs/PROZESS_BESCHREIBUNG.md) | Verarbeitungsvorgänge, Datenkategorien, Speicherorte, Speicherdauer und Empfänger — Grundlage für das Verzeichnis von Verarbeitungstätigkeiten (Art. 30 DSGVO) |
+| [COMPLIANCE_BERICHT.md](docs/COMPLIANCE_BERICHT.md) | Prüfung gegen DSGVO und die NIS2-Risikomanagementmaßnahmen (Art. 21 Abs. 2), mit umgesetzten Maßnahmen, Befunden und Restrisiken |
+| [DATENSCHUTZ_FOLGEABSCHAETZUNG.md](docs/DATENSCHUTZ_FOLGEABSCHAETZUNG.md) | Schwellwertanalyse und Datenschutz-Folgenabschätzung (Art. 35 DSGVO) |
+| [SOURCECODE_STATISTIK.md](docs/SOURCECODE_STATISTIK.md) | Umfang, Testabdeckung, Dokumentationsgrad und Abhängigkeiten |
+| [docs/javadoc](docs/javadoc) | API-Dokumentation, neu erzeugt mit `./gradlew javadoc -Pstage=release` |
+
+Die Dokumente beschreiben die Software; die organisatorischen Teile (Rechtsgrundlage, Löschfristen,
+Verantwortlichkeiten) sind vom Betreiber der Instanz zu ergänzen.
 
 ## Weitere Hilfe
 

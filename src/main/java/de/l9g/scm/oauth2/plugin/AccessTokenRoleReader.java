@@ -17,7 +17,6 @@
 package de.l9g.scm.oauth2.plugin;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import org.slf4j.Logger;
@@ -35,23 +34,31 @@ import java.util.Set;
  * <p>The path is a dot separated list of field names, array indexes are
  * supported as well, so {@code resource_access.scm-server.roles} works too.
  *
- * <p>The signature of the token is not verified, because it was received
- * directly from the token endpoint of the configured identity provider over
- * tls, exactly like the userinfo response.
+ * <p>Roles are group memberships and therefore the basis of authorization. They are
+ * only read from a token whose signature {@link TokenVerifier} could verify - an
+ * opaque token, a token with an invalid signature or a missing key set means no
+ * roles, never roles from unverified data.
  */
 public class AccessTokenRoleReader {
 
   private static final Logger LOG = LoggerFactory.getLogger(AccessTokenRoleReader.class);
 
   private final OAuth2Context context;
-  private final ObjectMapper objectMapper;
+  private final TokenVerifier tokenVerifier;
 
   @Inject
-  public AccessTokenRoleReader(OAuth2Context context, ObjectMapper objectMapper) {
+  public AccessTokenRoleReader(OAuth2Context context, TokenVerifier tokenVerifier) {
     this.context = context;
-    this.objectMapper = objectMapper;
+    this.tokenVerifier = tokenVerifier;
   }
 
+  /**
+   * Reads the roles at the configured path.
+   *
+   * @param accessToken access token of the code exchange
+   * @return the roles, still unsanitized; empty if the import is disabled, no path
+   *         is configured, the token could not be verified or the path does not exist
+   */
   public Set<String> read(String accessToken) {
     OAuth2Configuration configuration = context.get();
     if (!configuration.isImportRealmRoles()) {
@@ -64,9 +71,10 @@ public class AccessTokenRoleReader {
       return Set.of();
     }
 
-    Optional<JsonNode> payload = JwtPayload.read(accessToken, objectMapper);
+    Optional<JsonNode> payload = tokenVerifier.verifyAccessToken(accessToken);
     if (!payload.isPresent()) {
-      LOG.warn("could not read the payload of the access token, it may not be a json web token");
+      // the verifier already logged why the token could not be used
+      LOG.debug("no verified access token available, skipping the role import");
       return Set.of();
     }
 
@@ -81,6 +89,10 @@ public class AccessTokenRoleReader {
     return values;
   }
 
+  /**
+   * Walks the dot separated path through the payload. A part consisting only of
+   * digits is treated as an array index, so {@code audiences.0} works as well.
+   */
   private Optional<JsonNode> resolve(JsonNode payload, String path) {
     JsonNode node = payload;
     for (String part : path.split("\\.")) {
@@ -96,6 +108,10 @@ public class AccessTokenRoleReader {
     return part.chars().allMatch(Character::isDigit) && !part.isEmpty();
   }
 
+  /**
+   * Accepts an array as well as a single value at the end of the path, empty
+   * entries are dropped.
+   */
   private Set<String> toValues(JsonNode node) {
     ImmutableSet.Builder<String> builder = ImmutableSet.builder();
     if (node.isArray()) {

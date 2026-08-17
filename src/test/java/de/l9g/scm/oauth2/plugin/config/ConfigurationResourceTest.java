@@ -42,6 +42,15 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+/**
+ * Tests the special rules of the configuration endpoint: the stored client secret is
+ * never returned, an empty secret on update keeps it while a submitted one replaces
+ * it, endpoint urls have to be absolute http urls, and an enabled configuration
+ * without a provider name is rejected.
+ *
+ * <p>The resource checks shiro permissions, therefore a subject is bound to the
+ * thread context in the setup and unbound afterwards.
+ */
 class ConfigurationResourceTest {
 
   private static final String STORED_SECRET = "the-stored-secret";

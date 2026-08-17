@@ -34,6 +34,15 @@ import java.util.Set;
 /**
  * Fetches the OIDC discovery document ({@code .well-known/openid-configuration})
  * of the identity provider and extracts the endpoints from it.
+ *
+ * <p>Only the fields the plugin actually needs are read. Authorization, token and
+ * userinfo endpoint are mandatory; the end session endpoint is optional (it only
+ * exists if the provider supports RP-initiated logout), {@code jwks_uri} and
+ * {@code issuer} are used to verify token signatures and the issuer claim, and
+ * {@code code_challenge_methods_supported} decides whether pkce is used.
+ *
+ * <p>Called by the {@link EndpointResolver}, which also caches the result - this
+ * class always performs a request.
  */
 public class DiscoveryClient {
 
@@ -50,6 +59,14 @@ public class DiscoveryClient {
     this.objectMapper = objectMapper;
   }
 
+  /**
+   * Fetches the discovery document and maps it to the endpoints.
+   *
+   * @param discoveryUrl issuer url or complete url of the document
+   * @return the endpoints described by the document
+   * @throws AuthenticationException if the document cannot be fetched, cannot be
+   *         parsed or does not contain one of the required endpoints
+   */
   public Endpoints fetch(String discoveryUrl) {
     JsonNode document = fetchDocument(normalizeDiscoveryUrl(discoveryUrl));
     return new Endpoints(
@@ -57,12 +74,21 @@ public class DiscoveryClient {
       requiredText(document, "token_endpoint"),
       requiredText(document, "userinfo_endpoint"),
       optionalText(document, "end_session_endpoint"),
+      // jwks_uri is mandatory for an OIDC provider, but a plain OAuth2 provider may
+      // not publish one; without it no token signature can be verified
+      optionalText(document, "jwks_uri"),
+      optionalText(document, "issuer"),
       textArray(document, "code_challenge_methods_supported")
     );
   }
 
   /**
    * Accepts the issuer base url as well as the complete discovery document url.
+   * Both forms are commonly copied out of a provider ui, so the well known path
+   * is appended only if it is not there yet.
+   *
+   * @param discoveryUrl configured url
+   * @return url of the discovery document
    */
   static String normalizeDiscoveryUrl(String discoveryUrl) {
     if (discoveryUrl.contains("/.well-known/")) {

@@ -41,6 +41,12 @@ import java.util.Set;
  * Only groups which were previously synchronized for this user are touched on
  * removal, so manually maintained memberships in other groups are preserved.
  * External groups are skipped, their members are not managed by SCM-Manager.
+ *
+ * <p>This synchronization is a convenience feature: it makes the groups visible in
+ * the administration ui so permissions can be granted to them. Authorization
+ * itself does not depend on it, it is based on the {@link GroupStore} through the
+ * {@link OAuth2GroupResolver}. That is why every failure in here is logged and
+ * swallowed.
  */
 public class GroupSynchronizer {
 
@@ -58,6 +64,14 @@ public class GroupSynchronizer {
     this.administrationContext = administrationContext;
   }
 
+  /**
+   * Aligns the group database with the claim of the current login.
+   *
+   * @param principal      user id
+   * @param previousGroups groups of the previous login, read before the store was
+   *                       overwritten
+   * @param currentGroups  sanitized groups of the current login
+   */
   public void sync(String principal, Set<String> previousGroups, Set<String> currentGroups) {
     try {
       // group management requires elevated privileges, but during the login the
@@ -102,6 +116,10 @@ public class GroupSynchronizer {
     return false;
   }
 
+  /**
+   * Creates the group with the user as first member if it does not exist yet,
+   * otherwise adds the user if necessary.
+   */
   private void addMember(String groupName, String principal) {
     if (!isValidGroupName(groupName)) {
       return;
@@ -121,6 +139,10 @@ public class GroupSynchronizer {
     }
   }
 
+  /**
+   * Removes the membership of a group which is no longer part of the claim. The
+   * group itself stays, together with the permissions granted to it.
+   */
   private void removeMember(String groupName, String principal) {
     if (!isValidGroupName(groupName)) {
       return;

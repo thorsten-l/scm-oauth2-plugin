@@ -34,6 +34,11 @@ import java.util.Set;
  * otherwise a previously assigned permission is revoked again.
  *
  * If no admin group is configured, permissions are never touched.
+ *
+ * <p>Only the permission {@code *} of exactly this user is looked at, so
+ * permissions granted by hand or through a group stay untouched. Deliberately no
+ * group permission: the group of the identity provider is not necessarily the
+ * group in SCM-Manager.
  */
 public class AdminGroupSynchronizer {
 
@@ -52,6 +57,13 @@ public class AdminGroupSynchronizer {
     this.administrationContext = administrationContext;
   }
 
+  /**
+   * Assigns or revokes the administrator permission, depending on whether the
+   * configured admin group is part of the groups of this login.
+   *
+   * @param principal user id
+   * @param groups    sanitized groups of the current login
+   */
   public void sync(String principal, Set<String> groups) {
     String adminGroup = context.get().getAdminGroup();
     if (Strings.isNullOrEmpty(adminGroup)) {
@@ -65,6 +77,8 @@ public class AdminGroupSynchronizer {
   }
 
   private void syncAdminPermission(String principal, boolean shouldBeAdmin) {
+    // filter for exactly this permission of exactly this user: not a group
+    // permission, matching name, permission value "*"
     Collection<AssignedPermission> assigned = securitySystem.getPermissions(
       permission -> !permission.isGroupPermission()
         && principal.equals(permission.getName())

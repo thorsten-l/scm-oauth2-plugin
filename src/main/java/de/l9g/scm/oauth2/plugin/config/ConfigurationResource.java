@@ -41,11 +41,29 @@ import java.net.URISyntaxException;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+/**
+ * REST endpoint of the plugin configuration, used by the administration ui.
+ *
+ * <p>Both methods check the permissions {@code configuration:read:oauth2} and
+ * {@code configuration:write:oauth2}, which are declared in
+ * {@code META-INF/scm/permissions.xml}.
+ *
+ * <p>Beyond a plain read and write there are three rules to be aware of:
+ *
+ * <ul>
+ *   <li>the client secret is never handed out, and an empty secret on update keeps
+ *       the stored one</li>
+ *   <li>a provider name is mandatory as soon as the plugin is enabled, because the
+ *       login button is labelled with it</li>
+ *   <li>only absolute http and https urls are accepted as endpoints</li>
+ * </ul>
+ */
 @Path(ConfigurationResource.PATH)
 public class ConfigurationResource {
 
   private static final String CONTENT_TYPE = VndMediaType.PREFIX + "oauth2Config" + VndMediaType.SUFFIX;
 
+  /** Path of this resource below {@code /api}. */
   public static final String PATH = "v2/oauth2/configuration";
 
   private final OAuth2Context context;
@@ -79,6 +97,12 @@ public class ConfigurationResource {
       schema = @Schema(implementation = ErrorDto.class)
     )
   )
+  /**
+   * @return the current configuration without the client secret, but with the hint
+   *         whether one is stored
+   * @throws org.apache.shiro.authz.AuthorizationException if the permission
+   *         {@code configuration:read:oauth2} is missing
+   */
   public ConfigurationDto get() {
     ConfigurationPermissions.read(Constants.NAME).check();
     OAuth2Configuration configuration = context.get();
@@ -105,6 +129,14 @@ public class ConfigurationResource {
       schema = @Schema(implementation = ErrorDto.class)
     )
   )
+  /**
+   * Replaces the configuration completely.
+   *
+   * @param dto new configuration; an empty client secret means "keep the stored one"
+   * @return 204 on success, 400 with a plain text reason if the configuration is invalid
+   * @throws org.apache.shiro.authz.AuthorizationException if the permission
+   *         {@code configuration:write:oauth2} is missing
+   */
   public Response update(ConfigurationDto dto) {
     ConfigurationPermissions.write(Constants.NAME).check();
 
@@ -140,13 +172,18 @@ public class ConfigurationResource {
         dto.getAuthorizationUrl(),
         dto.getTokenUrl(),
         dto.getUserinfoUrl(),
-        dto.getEndSessionUrl()
+        dto.getEndSessionUrl(),
+        dto.getJwksUrl()
       )
       .filter(url -> !Strings.isNullOrEmpty(url))
       .filter(url -> !isHttpUrl(url))
       .findFirst();
   }
 
+  /**
+   * Rejects everything which is not an absolute http url with a host, so no
+   * {@code file:}, {@code jar:} or relative url can be smuggled in.
+   */
   private boolean isHttpUrl(String value) {
     try {
       URI uri = new URI(value);

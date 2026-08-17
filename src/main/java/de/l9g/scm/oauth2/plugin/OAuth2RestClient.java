@@ -34,6 +34,15 @@ import java.io.IOException;
  * Client for the OAuth2/OIDC endpoints of the identity provider.
  * Exchanges an authorization code for tokens and reads the
  * user claims from the userinfo endpoint.
+ *
+ * <p>{@code AdvancedHttpClient} of the core is used on purpose instead of a own
+ * http client: it honours the proxy settings of SCM-Manager and takes part in its
+ * tracing ({@code spanKind}).
+ *
+ * <p>Error handling follows one rule: every failure becomes an
+ * {@code AuthenticationException}, because every caller is part of a login. Status
+ * codes 400, 401 and 403 are accepted explicitly, otherwise the client would throw
+ * before the status can be logged with a useful message.
  */
 public class OAuth2RestClient {
 
@@ -52,6 +61,17 @@ public class OAuth2RestClient {
     this.objectMapper = objectMapper;
   }
 
+  /**
+   * Redeems the authorization code at the token endpoint (rfc 6749, section 4.1.3).
+   * The client authenticates itself with client id and secret in the form body.
+   *
+   * @param code         authorization code of the callback
+   * @param redirectUri  callback url of the authorization request, has to be identical
+   * @param codeVerifier pkce verifier, omitted if {@code null} or empty
+   * @return access token and, if the provider issues one, the id token
+   * @throws AuthenticationException if the request fails, the status is not 200 or
+   *         the response contains no access token
+   */
   public TokenResponse exchangeCodeForToken(String code, String redirectUri, String codeVerifier) {
     OAuth2Configuration configuration = context.get();
     Endpoints endpoints = endpointResolver.resolve();
@@ -89,6 +109,17 @@ public class OAuth2RestClient {
     return new TokenResponse(accessToken.asText(), optionalText(tokenResponse, "id_token"));
   }
 
+  /**
+   * Reads the claims of the authenticated user from the userinfo endpoint.
+   *
+   * <p>Note for troubleshooting: which claims appear here is decided by the
+   * identity provider. In keycloak a protocol mapper has to have "Add to userinfo"
+   * enabled, otherwise the claim exists in the token but not in this response.
+   *
+   * @param accessToken access token of the code exchange
+   * @return the parsed userinfo response
+   * @throws AuthenticationException if the request fails or the status is not 200
+   */
   public JsonNode fetchUserInfo(String accessToken) {
     Endpoints endpoints = endpointResolver.resolve();
 
@@ -124,10 +155,19 @@ public class OAuth2RestClient {
     return value.asText();
   }
 
+  /**
+   * Certificate validation is only disabled while SCM-Manager runs in the
+   * development stage ({@code ./gradlew run}), so a self signed test provider can
+   * be used. In production the validation is always active.
+   */
   private boolean isDevelopmentStageActive() {
     return contextProvider.getStage() == Stage.DEVELOPMENT;
   }
 
+  /**
+   * Wraps the checked {@code IOException} of the http client, so the callers stay
+   * readable and every failure is an authentication failure.
+   */
   private AdvancedHttpResponse execute(RequestExecutor executor) {
     try {
       return executor.execute();

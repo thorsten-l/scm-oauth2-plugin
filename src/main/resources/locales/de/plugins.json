@@ -31,6 +31,8 @@
       "userinfoUrlHelp": "URL des OIDC Userinfo Endpoints des Identity Providers.",
       "endSessionUrl": "End Session Endpoint",
       "endSessionUrlHelp": "URL des OIDC End Session Endpoints für den vollständigen SSO-Logout. Optional, nur nötig, wenn \"Vollständiger SSO-Logout\" aktiviert und keine Discovery URL gesetzt ist.",
+      "jwksUrl": "JSON Web Key Set (JWKS) Endpoint",
+      "jwksUrlHelp": "URL der öffentlichen Schlüssel des Identity Providers, mit denen die Signaturen von ID Token und Access Token geprüft werden. Nur nötig ohne Discovery URL, die diesen Endpunkt selbst liefert. Ohne ihn werden weder das ID Token noch Rollen aus dem Access Token verwendet.",
       "client": "Client",
       "clientId": "Client ID",
       "clientIdHelp": "Die beim Identity Provider registrierte Client ID.",

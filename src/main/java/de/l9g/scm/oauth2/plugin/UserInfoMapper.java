@@ -31,6 +31,11 @@ import java.util.Set;
 /**
  * Maps the claims of an OIDC userinfo response to an SCM-Manager user
  * and its group memberships.
+ *
+ * <p>Which claim is used for what is configurable, see
+ * {@link OAuth2Configuration}. Claims may be missing or may be arrays instead of
+ * single values (a keycloak mapper with "multivalued" for instance), therefore
+ * every read goes through {@code getStringClaim}.
  */
 public class UserInfoMapper {
 
@@ -49,6 +54,10 @@ public class UserInfoMapper {
    * Creates a user from the claims. Attributes which the identity provider does
    * not deliver are left empty on purpose, so that {@link UserMigration} can
    * keep the stored value of an already existing account.
+   *
+   * @param userInfo parsed userinfo response
+   * @return user which is not persisted yet
+   * @throws AuthenticationException if no usable user name can be determined
    */
   public User createUser(JsonNode userInfo) {
     String username = getUsername(userInfo);
@@ -56,16 +65,25 @@ public class UserInfoMapper {
     User user = new User(username);
     user.setDisplayName(getStringClaim(userInfo, context.get().getDisplayNameAttribute()));
     setEmail(userInfo, user);
+    // external means: authenticated elsewhere, no local password
     user.setExternal(true);
 
     return user;
   }
 
+  /**
+   * Reads the group names of the configured claim.
+   *
+   * @param userInfo parsed userinfo response
+   * @return the group names as they were delivered, still unsanitized; empty if
+   *         the claim is missing
+   */
   public Set<String> createGroups(JsonNode userInfo) {
     ImmutableSet.Builder<String> builder = ImmutableSet.builder();
 
     JsonNode groups = userInfo.get(context.get().getGroupAttribute());
     if (groups != null) {
+      // a single group may arrive as a plain string instead of an array
       if (groups.isArray()) {
         for (JsonNode group : groups) {
           builder.add(group.asText());
@@ -78,6 +96,11 @@ public class UserInfoMapper {
     return builder.build();
   }
 
+  /**
+   * The user name is the identity inside SCM-Manager, every permission and every
+   * repository ownership refers to it. The {@code sub} claim is used as fallback,
+   * it is guaranteed to exist in OIDC - not pretty, but better than a failed login.
+   */
   private String getUsername(JsonNode userInfo) {
     String username = getStringClaim(userInfo, context.get().getUsernameAttribute());
     if (Strings.isNullOrEmpty(username)) {
@@ -89,15 +112,34 @@ public class UserInfoMapper {
     return username;
   }
 
+  /**
+   * An invalid mail address would make the core reject the user, which would break
+   * the login completely. Therefore it is dropped with a log entry instead.
+   *
+   * <p>The address itself is not written to the log: it is personal data which is
+   * not needed to fix the problem (the claim of the identity provider is the place
+   * to look). Only the length is reported, which is enough to tell an empty value
+   * apart from a malformed one.
+   */
   private void setEmail(JsonNode userInfo, User user) {
     String mail = getStringClaim(userInfo, context.get().getMailAttribute());
     if (ValidationUtil.isMailAddressValid(mail)) {
       user.setMail(mail);
     } else if (!Strings.isNullOrEmpty(mail)) {
-      LOG.info("found invalid email address '{}' for oauth2 user '{}'; leaving email blank", mail, user.getName());
+      LOG.info(
+        "the mail claim of oauth2 user '{}' is not a valid mail address ({} characters); leaving email blank",
+        user.getName(), mail.length()
+      );
     }
   }
 
+  /**
+   * Reads a claim as string. Arrays are reduced to their first element, because
+   * some providers deliver even single values as an array.
+   *
+   * @return value of the claim or {@code null} if it is missing, json null or an
+   *         empty array
+   */
   private String getStringClaim(JsonNode userInfo, String claimName) {
     JsonNode claim = userInfo.get(claimName);
     if (claim == null || claim.isNull()) {

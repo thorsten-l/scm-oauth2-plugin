@@ -16,8 +16,17 @@
 
 package de.l9g.scm.oauth2.plugin;
 
+/**
+ * Constants which are shared between backend classes.
+ */
 public final class Constants {
 
+  /**
+   * Name of the plugin, used as name of the configuration store
+   * ({@code config/oauth2.xml}), as suffix of the permissions
+   * ({@code configuration:read,write:oauth2}) and as realm name of the
+   * authentication info.
+   */
   public static final String NAME = "oauth2";
 
   private Constants() {

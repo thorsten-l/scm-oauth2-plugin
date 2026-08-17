@@ -41,6 +41,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * Tests the assignment and the revocation of the global administrator permission,
+ * including the cases which must not happen: no permission without a configured
+ * admin group, no second identical assignment, and no interference with permissions
+ * of other users or with group permissions.
+ */
 @ExtendWith(MockitoExtension.class)
 class AdminGroupSynchronizerTest {
 

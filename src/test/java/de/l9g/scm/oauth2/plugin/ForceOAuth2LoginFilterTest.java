@@ -40,6 +40,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Tests when the filter redirects and when it lets a request pass. The two
+ * important cases: a request with a valid access token cookie passes (otherwise the
+ * browser would loop between callback and identity provider), a forged cookie does
+ * not. Requests of the web interface get a 401 instead of a redirect.
+ */
 @ExtendWith(MockitoExtension.class)
 class ForceOAuth2LoginFilterTest {
 

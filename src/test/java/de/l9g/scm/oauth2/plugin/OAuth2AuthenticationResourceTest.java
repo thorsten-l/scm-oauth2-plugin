@@ -40,13 +40,22 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Tests of the two endpoints, with the emphasis on the security properties of the
+ * flow: the state has to match the state cookie of the browser, an unknown or
+ * missing state is rejected, a state cannot be used twice, the redirect target has
+ * to stay inside this instance, the pkce challenge is only sent if the provider
+ * supports it, and neither an error of the identity provider nor an internal
+ * authentication failure is reflected to the caller.
+ */
 @ExtendWith(MockitoExtension.class)
 class OAuth2AuthenticationResourceTest {
 
   private static final String STATE = "the-state";
   private static final String VERIFIER = "the-code-verifier";
+  private static final String NONCE = "the-nonce";
 
-  private static final AuthorizationRequest PENDING = new AuthorizationRequest(STATE, VERIFIER, "/repos");
+  private static final AuthorizationRequest PENDING = new AuthorizationRequest(STATE, VERIFIER, NONCE, "/repos");
 
   @Mock
   private OAuth2Context context;
@@ -193,10 +202,35 @@ class OAuth2AuthenticationResourceTest {
   }
 
   @Test
+  void shouldSendNonceWithTheAuthorizationRequest() {
+    when(stateStore.create(any())).thenReturn(PENDING);
+    when(endpointResolver.resolve()).thenReturn(new Endpoints("https://idp.hitchhiker.com/auth", "t", "u", null));
+    mockRequestUrl();
+
+    Response result = resource.login(request, "/");
+
+    // the identity provider echoes the nonce into the id token
+    assertThat(result.getLocation().toString()).contains("nonce=" + NONCE);
+  }
+
+  @Test
+  void shouldPassNonceOfTheAuthorizationRequestToTheRealm() {
+    when(request.getCookies()).thenReturn(new Cookie[]{new Cookie(StateCookie.NAME, STATE)});
+    when(stateStore.consume(STATE)).thenReturn(Optional.of(PENDING));
+    mockRequestUrl();
+
+    resource.callback(request, response, "the-code", STATE, null, null);
+
+    ArgumentCaptor<OAuth2Token> captor = ArgumentCaptor.forClass(OAuth2Token.class);
+    verify(loginHandler).login(any(), any(), captor.capture());
+    assertThat(captor.getValue().getNonce()).isEqualTo(NONCE);
+  }
+
+  @Test
   void shouldSendPkceChallenge() {
     when(stateStore.create(any())).thenReturn(PENDING);
     when(endpointResolver.resolve()).thenReturn(
-      new Endpoints("https://idp.hitchhiker.com/auth", "t", "u", null, Set.of("plain", "S256"))
+      new Endpoints("https://idp.hitchhiker.com/auth", "t", "u", null, null, null, Set.of("plain", "S256"))
     );
     mockRequestUrl();
 
@@ -213,7 +247,7 @@ class OAuth2AuthenticationResourceTest {
   void shouldNotSendPkceChallengeIfProviderDoesNotSupportIt() {
     when(stateStore.create(any())).thenReturn(PENDING);
     when(endpointResolver.resolve()).thenReturn(
-      new Endpoints("https://idp.hitchhiker.com/auth", "t", "u", null, Set.of("plain"))
+      new Endpoints("https://idp.hitchhiker.com/auth", "t", "u", null, null, null, Set.of("plain"))
     );
     mockRequestUrl();
 

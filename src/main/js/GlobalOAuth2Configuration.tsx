@@ -20,9 +20,17 @@ import { Configuration, Title } from "@scm-manager/ui-components";
 import GlobalOAuth2ConfigurationForm from "./GlobalOAuth2ConfigurationForm";
 
 type Props = {
+  /** Url of the configuration resource, passed in by the configuration binder. */
   link: string;
 };
 
+/**
+ * Configuration page below "Administration / Settings".
+ *
+ * The "Configuration" component of the core does the whole plumbing: it loads the
+ * configuration from the link, renders the form, shows the save button and writes
+ * the configuration back. The plugin only provides the fields.
+ */
 const GlobalOAuth2Configuration: React.FC<Props> = ({ link }) => {
   const [t] = useTranslation("plugins");
 

@@ -32,6 +32,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
 
+/**
+ * Tests the mapping of claims to a user and to groups, including the fallback to the
+ * {@code sub} claim, the handling of an invalid mail address (dropped instead of
+ * failing) and group claims as array, as single value and missing.
+ */
 @ExtendWith(MockitoExtension.class)
 class UserInfoMapperTest {
 

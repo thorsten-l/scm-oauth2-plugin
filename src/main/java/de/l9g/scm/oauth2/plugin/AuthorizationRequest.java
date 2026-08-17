@@ -21,8 +21,12 @@ import lombok.Getter;
 
 /**
  * A pending authorization request: the state which is handed to the identity
- * provider, the pkce verifier belonging to it and the url the user should be
- * redirected to after a successful login.
+ * provider, the pkce verifier and the nonce belonging to it and the url the user
+ * should be redirected to after a successful login.
+ *
+ * <p>The three random values have different jobs: the state protects the callback
+ * against csrf, the pkce verifier binds the authorization code to this request, and
+ * the nonce binds the id token to this login.
  */
 @Getter
 @AllArgsConstructor
@@ -30,6 +34,7 @@ public class AuthorizationRequest {
 
   private final String state;
   private final String codeVerifier;
+  private final String nonce;
   private final String redirectUrl;
 
 }

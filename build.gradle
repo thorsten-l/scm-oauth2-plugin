@@ -34,9 +34,29 @@ configurations.all {
   }
 }
 
+// gradle has no profiles, a "profile" is a plain condition on a project property:
+//   ./gradlew build -Pstage=release
+def releaseStage = findProperty('stage') == 'release'
+
 tasks.withType(Javadoc) {
   // do not complain about missing javadoc, real javadoc errors stay visible
   options.addStringOption('Xdoclint:all,-missing', '-quiet')
+  options.encoding = 'UTF-8'
+
+  if (releaseStage) {
+    // the javadoc of a release is written next to the sources instead of into the
+    // build directory, so it is committed and can be browsed on github
+    destinationDir = file('docs/javadoc')
+    options.charSet = 'UTF-8'
+    options.docTitle = "OAuth2/OIDC Authentication Plugin ${project.version}"
+    options.windowTitle = "scm-oauth2-plugin ${project.version}"
+
+    // remove the previous documentation first, otherwise pages of classes which
+    // were deleted in the meantime would stay behind
+    doFirst {
+      destinationDir.deleteDir()
+    }
+  }
 }
 
 dependencies {

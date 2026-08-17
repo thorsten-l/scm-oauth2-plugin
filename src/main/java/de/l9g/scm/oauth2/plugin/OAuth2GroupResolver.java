@@ -24,6 +24,15 @@ import java.util.Set;
 
 import static java.util.Collections.emptySet;
 
+/**
+ * Tells SCM-Manager which groups a user belongs to. The core asks every registered
+ * resolver while it builds the authorization info of a request, and the results of
+ * all resolvers are combined.
+ *
+ * <p>The answer comes from the {@link GroupStore}, which was filled during the
+ * login. Groups therefore work for every kind of request, including git over http
+ * with an api key, where no claims are available.
+ */
 @Extension
 public class OAuth2GroupResolver implements GroupResolver {
 
@@ -34,6 +43,10 @@ public class OAuth2GroupResolver implements GroupResolver {
     this.store = store;
   }
 
+  /**
+   * @param principal user id
+   * @return groups of the last oauth2 login, never {@code null}
+   */
   @Override
   public Set<String> resolve(String principal) {
     Set<String> groups = store.get(principal);

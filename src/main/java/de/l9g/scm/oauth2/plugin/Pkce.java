@@ -26,9 +26,13 @@ import java.util.Base64;
  * Proof key for code exchange (rfc 7636). Protects the authorization code
  * against interception and injection, because the code can only be redeemed
  * together with the verifier of the request which started the flow.
+ *
+ * <p>Only the hashed challenge is sent to the identity provider, the verifier stays
+ * in the {@link StateStore} until the code is exchanged at the token endpoint.
  */
 final class Pkce {
 
+  /** Hashed method, the only one used here; {@code plain} would not add any protection. */
   static final String METHOD = "S256";
 
   private static final int VERIFIER_LENGTH_IN_BYTES = 32;
@@ -39,12 +43,21 @@ final class Pkce {
   private Pkce() {
   }
 
+  /**
+   * @return a random verifier, 32 bytes base64url encoded results in 43
+   *         characters and therefore fits the length required by rfc 7636
+   */
   static String createVerifier() {
     byte[] bytes = new byte[VERIFIER_LENGTH_IN_BYTES];
     RANDOM.nextBytes(bytes);
     return ENCODER.encodeToString(bytes);
   }
 
+  /**
+   * @param verifier verifier of the authorization request
+   * @return base64url encoded sha-256 of the verifier, to be sent as
+   *         {@code code_challenge}
+   */
   static String createChallenge(String verifier) {
     try {
       byte[] digest = MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII));

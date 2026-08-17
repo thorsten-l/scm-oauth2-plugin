@@ -20,6 +20,11 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Tests the normalization of the discovery url: the well known path is appended to an
+ * issuer url with and without a trailing slash, and a complete document url is kept
+ * as it is.
+ */
 class DiscoveryClientTest {
 
   @Test

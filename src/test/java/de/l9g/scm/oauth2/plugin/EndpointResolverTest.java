@@ -31,6 +31,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * Tests the two sources of the endpoints and the behaviour of the cache: manual
+ * configuration, resolution from the discovery document, one request per hour and a
+ * new request as soon as the cache expires or the discovery url changes.
+ */
 @ExtendWith(MockitoExtension.class)
 class EndpointResolverTest {
 

@@ -45,10 +45,20 @@ public class IdTokenStore {
     this(Clock.systemUTC());
   }
 
+  /**
+   * Constructor for the tests, which need a controllable clock to verify the expiry.
+   */
   IdTokenStore(Clock clock) {
     this.clock = clock;
   }
 
+  /**
+   * Stores the id token of a login and replaces the token of a previous one. A
+   * missing token (plain OAuth2 without OIDC) is ignored.
+   *
+   * @param principal user id
+   * @param idToken   id token of the token response, may be {@code null}
+   */
   public void put(String principal, String idToken) {
     removeExpiredTokens();
     if (!Strings.isNullOrEmpty(idToken)) {
@@ -56,6 +66,12 @@ public class IdTokenStore {
     }
   }
 
+  /**
+   * Reads and removes the token of a user, it is only needed for a single logout.
+   *
+   * @param principal user id, may be {@code null}
+   * @return the id token, empty if there is none or it has expired
+   */
   public Optional<String> remove(String principal) {
     if (principal == null) {
       return Optional.empty();
